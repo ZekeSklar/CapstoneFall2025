@@ -1,0 +1,10 @@
+codebase/.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+codebase/db.sqlite3
+*.sqlite3
+.DS_Store
+.env
+.vscode/settings.json

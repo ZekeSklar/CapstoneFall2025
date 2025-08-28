@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Printer Portal</title>
+  </head>
+  <body>
+    <h1>{{ printer.campus_label }} — {{ printer.asset_tag }}</h1>
+    <p><strong>Make/Model:</strong> {{ printer.make }} {{ printer.model }}</p>
+    <p><strong>Location:</strong> {{ printer.building }} / {{ printer.location_in_building }}</p>
+    {% if printer.ip_address %}
+      <p><strong>IP Address:</strong> {{ printer.ip_address }}</p>
+    {% endif %}
+    <p><strong>MAC Address:</strong> {{ printer.mac_address }}</p>
+    <hr>
+    <p>This confirms your QR token lookup is working.</p>
+  </body>
+</html>
