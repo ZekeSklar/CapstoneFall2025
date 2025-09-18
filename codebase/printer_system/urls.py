@@ -16,7 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from tickets.views import printer_portal, ticket_thanks
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('p/<str:qr_token>/', printer_portal, name='printer_portal'),
+    path('thanks/', ticket_thanks, name='ticket_thanks'),
 ]

@@ -1,0 +1,86 @@
+/* Direct element overrides for admin header and branding */
+#header, #header .branding, #header h1, #header a, #site-name, .login #header, .login #header .branding, .login #header h1, .login #header a {
+  background: #0033A0 !important;
+  color: #fff !important;
+  border: none !important;
+  text-shadow: none !important;
+}
+
+#header .branding, #header h1, #header a, .login #header .branding, .login #header h1, .login #header a {
+  color: #fff !important;
+  text-shadow: none !important;
+}
+
+/* Remove yellow from admin theme variables if still present */
+body [style*="#ffc"], body [style*="yellow"], body [style*="#ff0"] {
+  color: #fff !important;
+  background: #0033A0 !important;
+}
+:root,
+html[data-theme="light"],
+html[data-theme="dark"] {
+  --secondary: #0033A0 !important;
+  --accent: #fff !important;
+  --header-color: #fff !important;
+  --header-branding-color: #fff !important;
+}
+:root {
+  --secondary: #0033A0 !important;      /* Berea Blue for background bars */
+  --accent: #fff !important;            /* White for 'Berea College Printing Services' */
+  --header-color: #fff !important;      /* White for 'Welcome, SKLARZ' and slashes */
+  --header-branding-color: #fff !important; /* White for branding text */
+}
+/* Ultra-specific overrides for admin header and branding, including inline styles */
+#header, #header .branding, #header h1, #header a, #site-name,
+.login #header, .login #header .branding, .login #header h1, .login #header a,
+#header[style], #header .branding[style], #header h1[style], #header a[style], #site-name[style],
+.login #header[style], .login #header .branding[style], .login #header h1[style], .login #header a[style] {
+  background-color: #0033A0 !important;
+  color: #fff !important;
+}
+/* Strong overrides for admin header and branding */
+#header, #header .branding, #header h1, #header a, #site-name, .login #header, .login #header .branding, .login #header h1, .login #header a {
+  background: #0033A0 !important;
+  color: #fff !important;
+}
+
+/* Fix for yellow text on admin and login */
+#header .branding, #header h1, #header a, .login #header .branding, .login #header h1, .login #header a {
+  color: #fff !important;
+}
+/* Shared brand */
+:root{
+  --berea-blue:#0033A0; --berea-blue-dark:#002b7a; --white:#fff; --black:#000;
+}
+
+/* Light */
+html[data-theme="light"]{
+  --primary:var(--berea-blue); --primary-fg:var(--white);
+  --header-bg:var(--berea-blue); --header-color:var(--white);
+  --header-branding-color:var(--white); --header-link-color:var(--white);
+  --body-bg:#fff; --body-fg:#000;
+  --link-fg:var(--berea-blue); --link-hover-color:#001a66;
+  --button-bg:var(--berea-blue); --button-fg:#fff; --button-hover-bg:var(--berea-blue-dark);
+  --breadcrumbs-bg:#f6f6f6;
+}
+
+/* Dark */
+html[data-theme="dark"]{
+  --primary:var(--berea-blue); --primary-fg:var(--white);
+  --secondary:var(--berea-blue); --accent:var(--white);
+  --header-bg:var(--berea-blue); --header-color:var(--white);
+  --header-branding-color:var(--white); --header-link-color:var(--white);
+  --body-fg:#e8e8e8; --link-fg:#7aa7ff; --link-hover-color:#a8c4ff;
+  --breadcrumbs-fg:#c4dce8;
+}
+
+/* Defensive overrides */
+#header{background:var(--header-bg)!important;color:var(--header-color)!important;}
+#header a,#header h1{color:var(--header-color)!important;}
+thead th{background:var(--berea-blue)!important;color:#fff!important;}
+.button,input[type=submit],.submit-row input{
+  background:var(--button-bg)!important;border-color:var(--berea-blue-dark)!important;color:var(--button-fg)!important;
+}
+/* Login card */
+.login #container{background:#fff;color:#000;}
+.login .submit-row input{background:var(--button-bg)!important;border-color:var(--berea-blue-dark)!important;color:#fff!important;}
