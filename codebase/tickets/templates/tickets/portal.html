@@ -2,17 +2,85 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Printer Portal</title>
+    <title>{{ printer.campus_label }} – Request</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;}
+      .card{border:1px solid #ddd;border-radius:8px;padding:1rem;margin-bottom:1rem;}
+      .row{display:flex;gap:1rem}
+      .row>div{flex:1}
+      label{display:block;font-weight:600;margin-top:.75rem}
+      input,select,textarea{width:100%;padding:.5rem;border:1px solid #ccc;border-radius:6px}
+      button{margin-top:1rem;padding:.6rem 1rem;border:0;border-radius:6px;background:#1e40af;color:#fff;font-weight:600;cursor:pointer}
+      .muted{color:#666}.hidden{display:none}
+    </style>
   </head>
   <body>
-    <h1>{{ printer.campus_label }} — {{ printer.asset_tag }}</h1>
-    <p><strong>Make/Model:</strong> {{ printer.make }} {{ printer.model }}</p>
-    <p><strong>Location:</strong> {{ printer.building }} / {{ printer.location_in_building }}</p>
-    {% if printer.ip_address %}
-      <p><strong>IP Address:</strong> {{ printer.ip_address }}</p>
-    {% endif %}
-    <p><strong>MAC Address:</strong> {{ printer.mac_address }}</p>
-    <hr>
-    <p>This confirms your QR token lookup is working.</p>
+    <div class="card">
+      <h1 style="margin:.2rem 0">{{ printer.campus_label }} — {{ printer.asset_tag }}</h1>
+      <p class="muted">
+        {{ printer.make }} {{ printer.model }} · {{ printer.building }} / {{ printer.location_in_building }}
+        {% if printer.ip_address %} · IP {{ printer.ip_address }}{% endif %} · MAC {{ printer.mac_address }}
+      </p>
+    </div>
+
+    <div class="card">
+      <form method="post">
+        {% csrf_token %}
+        <label>Request type</label>
+        <select name="type" id="type">
+          <option value="SUPPLY">Order supplies</option>
+          <option value="ISSUE">Report an issue</option>
+        </select>
+
+        <div id="supplyFields">
+          <label for="supply_type">Supply type</label>
+          <input type="text" name="supply_type" id="supply_type" placeholder="e.g., Black toner T-FC415U-K">
+          <label for="supply_quantity">Quantity</label>
+          <input type="number" name="supply_quantity" id="supply_quantity" min="1" value="1">
+        </div>
+
+        <div id="issueFields" class="hidden">
+          <label for="issue_category">Issue category</label>
+          <select name="issue_category" id="issue_category">
+            <option value="">-- Select --</option>
+            <option value="PAPER_JAM">Paper jam</option>
+            <option value="PRINT_QUALITY">Print quality</option>
+            <option value="ERROR_CODE">Error code on panel</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="requester_name">Your name (optional)</label>
+            <input type="text" name="requester_name" id="requester_name">
+          </div>
+          <div>
+            <label for="requester_email">Your email (optional)</label>
+            <input type="email" name="requester_email" id="requester_email" placeholder="name@berea.edu">
+          </div>
+        </div>
+
+        <label for="details">Additional details (optional)</label>
+        <textarea name="details" id="details" rows="4" placeholder="Anything else we should know?"></textarea>
+
+        <button type="submit">Submit</button>
+      </form>
+    </div>
+
+    <script>
+      const typeSel = document.getElementById('type');
+      const supply = document.getElementById('supplyFields');
+      const issue = document.getElementById('issueFields');
+      function sync(){ if(typeSel.value==='SUPPLY'){supply.classList.remove('hidden');issue.classList.add('hidden');}
+                       else{issue.classList.remove('hidden');supply.classList.add('hidden');}}
+      typeSel.addEventListener('change', sync); sync();
+    </script>
   </body>
 </html>
+
+
+
+
+

@@ -1,0 +1,5 @@
+{% extends "admin/login.html" %}
+{% load static %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'tickets/admin.css' %}">{% endblock %}
+{% block extrahead %}{{ block.super }}<link rel="stylesheet" href="{% static 'tickets/admin.css' %}">{% endblock %}

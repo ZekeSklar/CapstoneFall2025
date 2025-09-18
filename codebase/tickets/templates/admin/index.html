@@ -1,0 +1,20 @@
+{% extends "admin/index.html" %}
+{% load static %}
+
+{% block content %}
+  <div class="dashboard-module">
+    <h2>Notifications</h2>
+    <ul>
+      {% for item in low_inventory_items %}
+        <li>
+          <strong>{{ item.name }}</strong> ({{ item.category }})
+          {% if item.model_number %} - Model: {{ item.model_number }}{% endif %}
+          <span style="color: red;">Low stock: {{ item.quantity_on_hand }} (Reorder threshold: {{ item.reorder_threshold }})</span>
+        </li>
+      {% empty %}
+        <li>No notifications. All inventory levels are sufficient.</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {{ block.super }}
+{% endblock %}
