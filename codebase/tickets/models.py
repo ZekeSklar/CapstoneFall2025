@@ -1,6 +1,8 @@
-
 from django.db import models
 from django.conf import settings
+from django.core.validators import RegexValidator
+from django.utils.crypto import get_random_string
+
 
 class PrinterComment(models.Model):
     printer = models.ForeignKey('Printer', on_delete=models.CASCADE, related_name='comments')
@@ -10,6 +12,7 @@ class PrinterComment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.user} on {self.printer} at {self.created_at:%Y-%m-%d %H:%M}"
+
 
 class InventoryItem(models.Model):
     name = models.CharField(max_length=100, help_text="User-friendly name, e.g., 'Toshiba color black toner'")
@@ -32,17 +35,52 @@ class InventoryItem(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.category}) [{self.model_number}]"
-from django.core.validators import RegexValidator
-from django.utils.crypto import get_random_string
 
-def default_qr_token():
-    return get_random_string(22)
+
+class PrinterGroup(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    building = models.CharField(max_length=120, blank=True, help_text="Optional building name if different from group name.")
+    description = models.TextField(blank=True)
+    group_order_allowed_emails = models.TextField(
+        blank=True,
+        help_text=(
+            "Comma or newline separated list of email addresses allowed to place group-wide orders. "
+            "Leave blank to allow any requester."
+        ),
+    )
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def allowed_email_set(self):
+        raw = (self.group_order_allowed_emails or '').replace(';', ',')
+        raw = raw.replace('\r', ',').replace('\n', ',')
+        tokens = [chunk.strip().lower() for chunk in raw.split(',') if chunk.strip()]
+        return set(tokens)
+
+    def allows_email(self, email: str | None) -> bool:
+        allowed = self.allowed_email_set
+        if not allowed:
+            return True
+        if not email:
+            return False
+        return email.strip().lower() in allowed
+
 
 # Accepts 00:11:22:33:44:55 or 00-11-22-33-44-55 (upper/lower)
 mac_validator = RegexValidator(
     regex=r'^([0-9A-Fa-f]{2}([-:])){5}([0-9A-Fa-f]{2})$',
     message="Enter a valid MAC address (e.g., 00:11:22:33:44:55)."
 )
+
+
+def default_qr_token():
+    return get_random_string(22)
+
 
 class Printer(models.Model):
     # Core identifiers
@@ -58,7 +96,8 @@ class Printer(models.Model):
     # Hardware identity
     serial_number = models.CharField(
         max_length=100,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         help_text="Device serial number (unique when known)."
     )
     make = models.CharField(max_length=80, help_text="Manufacturer, e.g., Toshiba, Lexmark")
@@ -69,6 +108,14 @@ class Printer(models.Model):
     location_in_building = models.CharField(
         max_length=120,
         help_text="Room/area, e.g., 1st Floor Near Circulation"
+    )
+    group = models.ForeignKey(
+        PrinterGroup,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='printers',
+        help_text="Logical grouping (e.g., building) for supply/issue management."
     )
 
     # Network
@@ -96,10 +143,11 @@ class Printer(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.campus_label} | {self.asset_tag} — {self.building} / {self.location_in_building}"
+        return f"{self.campus_label} | {self.asset_tag} | {self.building} / {self.location_in_building}"
 
     def clean(self):
         from django.core.exceptions import ValidationError
+
         generic_values = {
             'mac_address': ['UNKNOWN-MACADDRESS', '00:00:00:00:00:00'],
             'ip_address': '0.0.0.0',
@@ -135,6 +183,7 @@ class Printer(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+
 class RequestTicket(models.Model):
     SUPPLY = 'SUPPLY'
     ISSUE = 'ISSUE'
@@ -152,6 +201,8 @@ class RequestTicket(models.Model):
     ]
 
     printer = models.ForeignKey(Printer, on_delete=models.CASCADE)
+    group = models.ForeignKey(PrinterGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='tickets')
+    applies_to_group = models.BooleanField(default=False)
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=NEW)
 
@@ -163,4 +214,5 @@ class RequestTicket(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"[{self.type}] {self.printer.campus_label} — {self.status}"
+        scope = 'group' if self.applies_to_group else 'single'
+        return f"[{self.type}] {self.printer.campus_label} ({scope}) | {self.status}"

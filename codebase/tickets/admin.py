@@ -7,7 +7,7 @@ from django.urls import path
 from django.template.response import TemplateResponse
 from django.http import HttpResponse
 import csv
-from .models import Printer, RequestTicket, InventoryItem, PrinterComment
+from .models import Printer, RequestTicket, InventoryItem, PrinterComment, PrinterGroup
 # Inline for PrinterComment
 class PrinterCommentInline(admin.TabularInline):
     model = PrinterComment
@@ -68,6 +68,14 @@ class InventoryItemAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 
+@admin.register(PrinterGroup)
+class PrinterGroupAdmin(admin.ModelAdmin):
+    list_display = ('name', 'building', 'member_count')
+    search_fields = ('name', 'building')
+
+    def member_count(self, obj):
+        return obj.printers.count()
+
 
 # ---- Shared helpers ----
 def _csv_http_response(prefix: str) -> HttpResponse:
@@ -97,17 +105,17 @@ class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
     list_display = (
         "campus_label", "asset_tag", "qr_token",
         "make", "model",
-        "building", "location_in_building",
+        "building", "location_in_building", "group",
         "ip_address", "mac_address",
         "is_active",
     )
     search_fields = (
         "campus_label", "asset_tag", "serial_number",
         "make", "model",
-        "building", "location_in_building",
+        "building", "location_in_building", "group__name",
         "ip_address", "mac_address",
     )
-    list_filter = ("is_active", "make", "model", "building")
+    list_filter = ("is_active", "make", "model", "building", "group")
     ordering = ("campus_label",)
     list_per_page = 50
     actions = ["export_printers_csv"]
@@ -145,8 +153,8 @@ class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
 # ---------- RequestTicket Admin + Export + Quick Status Actions ----------
 @admin.register(RequestTicket)
 class RequestTicketAdmin(AdminCSSMixin, admin.ModelAdmin):
-    list_display = ("printer", "type", "status", "created_at")
-    list_filter = ("type", "status", "created_at", "printer__building", "printer__make")
+    list_display = ("printer", "type", "status", "applies_to_group", "created_at")
+    list_filter = ("type", "status", "created_at", "applies_to_group", "group", "printer__building", "printer__make")
     search_fields = (
         "printer__campus_label",
         "printer__asset_tag",
@@ -155,13 +163,14 @@ class RequestTicketAdmin(AdminCSSMixin, admin.ModelAdmin):
         "printer__location_in_building",
         "printer__ip_address",
         "printer__mac_address",
+        "group__name",
         "requester_email",
     )
     autocomplete_fields = ("printer",)
     ordering = ("-created_at",)
     date_hierarchy = "created_at"
     list_per_page = 50
-    list_select_related = ("printer",)
+    list_select_related = ("printer", "group")
     actions = ["mark_in_progress", "mark_fulfilled", "mark_closed", "export_tickets_csv"]
 
     @admin.action(description="Mark selected as In Progress")
@@ -187,11 +196,14 @@ class RequestTicketAdmin(AdminCSSMixin, admin.ModelAdmin):
             "printer_make", "printer_model",
             "printer_building", "printer_location",
             "printer_ip", "printer_mac",
+            "scope", "group_name",
             # Requester + details
             "requester_name", "requester_email", "details",
         ])
-        for t in queryset.select_related("printer"):
+        for t in queryset.select_related("printer", "group"):
             p = t.printer
+            scope = "Group" if t.applies_to_group else "Single"
+            group_name = t.group.name if t.group else ""
             writer.writerow([
                 t.created_at.isoformat(timespec="seconds"),
                 t.type, t.status,
@@ -199,6 +211,7 @@ class RequestTicketAdmin(AdminCSSMixin, admin.ModelAdmin):
                 p.make, p.model,
                 p.building, p.location_in_building,
                 p.ip_address or "", p.mac_address,
+                scope, group_name,
                 t.requester_name or "", t.requester_email or "",
                 (t.details or "").replace("\r\n", " ").replace("\n", " "),
             ])
