@@ -102,7 +102,7 @@ class Printer(models.Model):
         from django.core.exceptions import ValidationError
         generic_values = {
             'mac_address': ['UNKNOWN-MACADDRESS', '00:00:00:00:00:00'],
-            'ip_address': 'UNKNOWN-IPADDRESS',
+            'ip_address': '0.0.0.0',
             'serial_number': 'UNKNOWN-SERIAL',
             'asset_tag': 'UNKNOWN-ASSET',
             'campus_label': 'UNKNOWN-LABEL',

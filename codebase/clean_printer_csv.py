@@ -2,7 +2,7 @@ import csv
 import re
 
 # Input and output file paths
-INPUT = 'printer_inventory_condensed_for_import_FINAL.csv'
+INPUT = 'printer_inventory_condensed_for_import_FINAL2.csv'
 OUTPUT = 'printer_inventory_condensed_for_import_FINAL.csv'
 
 def normalize_mac(mac):
@@ -21,12 +21,19 @@ def flatten_comment(comment):
     # Replace newlines and excessive whitespace with ' | '
     return re.sub(r'\s*\n+\s*', ' | ', comment).replace('"', "'").strip()
 
-def clean_unknown(val):
+def clean_unknown(val, placeholder=''):
     if val is None:
-        return ''
-    if str(val).strip().lower() in ['unknown', 'unknown-macaddress', 'not yet known', 'n/a', 'na', 'none', 'null', 'tbd', 'tba', 'pending', 'unk', 'unk.', 'unknown,', 'unknown\n', 'unknown\r\n']:
-        return ''
-    return val
+        return placeholder
+    value = str(val).strip()
+    if not value:
+        return placeholder
+    if value.lower() in [
+        'unknown', 'unknown-macaddress', 'unknown-ipaddress', 'unknown-serial', 'unknown-asset', 'unknown-label',
+        'not yet known', 'n/a', 'na', 'none', 'null', 'tbd', 'tba', 'pending', 'unk', 'unk.', 'unknown,', 'unknown\n', 'unknown\r\n'
+    ]:
+        return placeholder
+    return value
+
 
 def main():
     with open(INPUT, newline='', encoding='utf-8') as infile, open(OUTPUT, 'w', newline='', encoding='utf-8') as outfile:
@@ -40,8 +47,8 @@ def main():
             # Flatten comments
             row['comments'] = flatten_comment(row.get('comments', ''))
             # Clean unknowns in ip_address and serial_number
-            row['ip_address'] = clean_unknown(row.get('ip_address', ''))
-            row['serial_number'] = clean_unknown(row.get('serial_number', ''))
+            row['ip_address'] = clean_unknown(row.get('ip_address', ''), '0.0.0.0')
+            row['serial_number'] = clean_unknown(row.get('serial_number', ''), 'UNKNOWN-SERIAL')
             # Insert generic values for campus_label and asset_tag if missing/unknown
             row['campus_label'] = row.get('campus_label', '').strip()
             if not row['campus_label'] or row['campus_label'].lower() in [

@@ -38,7 +38,7 @@ class CustomAdminSite(admin.AdminSite):
         from .models import Printer
         generic_values = {
             'mac_address': 'UNKNOWN-MACADDRESS',
-            'ip_address': 'UNKNOWN-IPADDRESS',
+            'ip_address': '0.0.0.0',
             'serial_number': 'UNKNOWN-SERIAL',
             'asset_tag': 'UNKNOWN-ASSET',
             'campus_label': 'UNKNOWN-LABEL',
