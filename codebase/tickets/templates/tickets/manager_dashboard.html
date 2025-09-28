@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Manager Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root{
+        --admin-bg:#080b12;
+        --admin-card:#121722;
+        --admin-border:#1d2433;
+        --admin-text:#e6ecff;
+        --admin-muted:#9aa3b8;
+        --admin-primary:#0b5cd6;
+        --admin-secondary:#0c7c59;
+        --admin-danger:#f97373;
+        --admin-pill:#1a2335;
+      }
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--admin-bg);color:var(--admin-text);margin:0;padding:2rem 1rem;}
+      .layout{max-width:980px;margin:0 auto;}
+      h1{margin:0 0 1.5rem;font-size:1.9rem;font-weight:600;}
+      .card{background:var(--admin-card);border:1px solid var(--admin-border);border-radius:10px;padding:1.5rem;margin-bottom:1.25rem;box-shadow:0 6px 14px rgba(8,11,18,.35);}
+      .card h2{margin:0;font-size:1.25rem;font-weight:600;color:var(--admin-text);}
+      .muted{color:var(--admin-muted);}
+      a.button{display:inline-flex;align-items:center;justify-content:center;padding:.55rem 1.1rem;border-radius:6px;text-decoration:none;color:#fff;background:var(--admin-primary);font-weight:600;transition:background .15s ease,filter .15s ease;}
+      a.button.secondary{background:var(--admin-secondary);}
+      a.button.small{padding:.45rem .9rem;font-size:.95rem;}
+      a.button:hover{filter:brightness(1.05);}
+      ul.printer-list{list-style:none;padding:0;margin:.45rem 0 0 0;}
+      ul.printer-list li{display:flex;justify-content:space-between;align-items:center;padding:.65rem .75rem;border:1px solid var(--admin-border);border-radius:8px;margin-bottom:.55rem;background:var(--admin-pill);gap:.75rem;flex-wrap:wrap;}
+      .actions{display:flex;gap:.5rem;flex-wrap:wrap;}
+      .group-actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.85rem;}
+      .alert{background:rgba(249,115,115,.12);border:1px solid rgba(249,115,115,.45);color:var(--admin-danger);padding:.9rem 1rem;border-radius:8px;margin-bottom:1.25rem;}
+      table{width:100%;border-collapse:collapse;margin-top:.75rem;}
+      table th,table td{padding:.6rem .75rem;border-bottom:1px solid var(--admin-border);text-align:left;font-size:.95rem;}
+      table th{background:rgba(11,92,214,.18);font-weight:600;color:var(--admin-text);}
+      table tr:nth-child(even){background:rgba(26,35,53,.45);}
+      table tr:nth-child(odd){background:rgba(26,35,53,.25);}
+      .empty{padding:.75rem;font-size:.95rem;color:var(--admin-muted);}
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <h1>Hello {{ display_name }}</h1>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+
+      {% if missing_email %}
+        <div class="alert">Add an email address to your staff account so Printing Services can reach you. Visit the admin profile page to update it.</div>
+      {% endif %}
+
+      {% if groups %}
+        {% for group in groups %}
+          <div class="card">
+            <div>
+              <h2>{{ group.name }}</h2>
+              {% if group.building %}
+                <p class="muted" style="margin-top:.15rem;">Building: {{ group.building }}</p>
+              {% endif %}
+            </div>
+            <div class="group-actions">
+              <a class="button" href="{% url 'manager_group_order' group.id %}">Order for entire group</a>
+              <a class="button secondary" href="{% url 'manager_group_quick_paper' group.id %}">Quick paper order</a>
+            </div>
+            <ul class="printer-list">
+              {% for printer in group.printers.all %}
+                <li>
+                  <div>
+                    <strong>{{ printer.campus_label }}</strong>
+                    <div class="muted">{{ printer.make }} {{ printer.model }} &mdash; {{ printer.location_in_building }}</div>
+                  </div>
+                  <div class="actions">
+                    <a class="button small" href="{% url 'manager_printer_order' printer.id %}">Order supplies</a>
+                    <a class="button small secondary" href="{% url 'manager_printer_issue' printer.id %}">Report issue</a>
+                  </div>
+                </li>
+              {% empty %}
+                <li class="empty">No printers are assigned to this group yet.</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="card">
+          <p class="muted">No printer groups are assigned to your account. Contact Printing Services if you believe this is an error.</p>
+        </div>
+      {% endif %}
+
+      <div class="card">
+        <h2>Recent issue reports</h2>
+        {% if recent_issues %}
+          <table>
+            <thead>
+              <tr>
+                <th>Submitted</th>
+                <th>Printer</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ticket in recent_issues %}
+                <tr>
+                  <td>{{ ticket.created_at|date:"M j, g:i a" }}</td>
+                  <td>{{ ticket.printer.campus_label }} &mdash; {{ ticket.printer.location_in_building }}</td>
+                  <td>{{ ticket.details|linebreaksbr }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty">No issues have been reported for your printers yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

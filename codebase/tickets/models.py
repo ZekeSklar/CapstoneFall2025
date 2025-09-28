@@ -38,6 +38,12 @@ class InventoryItem(models.Model):
 
 
 class PrinterGroup(models.Model):
+    managers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="managed_printer_groups",
+        help_text="Users allowed to manage printers in this group."
+    )
     name = models.CharField(max_length=120, unique=True)
     building = models.CharField(max_length=120, blank=True, help_text="Optional building name if different from group name.")
     description = models.TextField(blank=True)
@@ -216,3 +222,4 @@ class RequestTicket(models.Model):
     def __str__(self):
         scope = 'group' if self.applies_to_group else 'single'
         return f"[{self.type}] {self.printer.campus_label} ({scope}) | {self.status}"
+

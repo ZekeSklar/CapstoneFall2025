@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Report Issue - {{ printer.campus_label }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root{
+        --admin-bg:#080b12;
+        --admin-card:#121722;
+        --admin-border:#1d2433;
+        --admin-text:#e6ecff;
+        --admin-muted:#9aa3b8;
+        --admin-primary:#417690;
+        --admin-secondary:#0b5cd6;
+        --admin-danger:#f97373;
+        --admin-pill:#1a2335;
+      }
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--admin-bg);color:var(--admin-text);margin:0;padding:2rem 1rem;}
+      .layout{max-width:820px;margin:0 auto;}
+      .card{background:var(--admin-card);border:1px solid var(--admin-border);border-radius:10px;padding:1.5rem;margin-bottom:1.25rem;box-shadow:0 6px 14px rgba(8,11,18,.35);}
+      h1{margin:0 0 .75rem;font-size:1.7rem;font-weight:600;}
+      label{display:block;font-weight:600;margin-top:1rem;}
+      select,textarea{width:100%;padding:.65rem;border:1px solid #273246;border-radius:6px;font-size:1rem;background:#0f141f;color:var(--admin-text);}      
+      textarea{min-height:110px;}
+      select:focus,textarea:focus{outline:2px solid rgba(65,118,144,.45);border-color:rgba(65,118,144,.65);}
+      .button{display:inline-flex;align-items:center;justify-content:center;padding:.75rem 1.4rem;border-radius:6px;text-decoration:none;background:var(--admin-primary);color:#fff;font-weight:600;font-size:1rem;cursor:pointer;border:0;transition:filter .15s ease;}
+      .button.secondary{background:var(--admin-secondary);}
+      .button:hover{filter:brightness(1.05);}
+      .field-error{color:var(--admin-danger);font-size:.9rem;margin-top:.35rem;}
+      .alert{background:rgba(249,115,115,.12);border:1px solid rgba(249,115,115,.45);color:var(--admin-danger);padding:.9rem 1rem;border-radius:8px;margin-bottom:1.1rem;}
+      .muted{color:var(--admin-muted);}
+      table{width:100%;border-collapse:collapse;margin-top:.75rem;}
+      table th,table td{padding:.6rem .75rem;border-bottom:1px solid var(--admin-border);text-align:left;font-size:.95rem;}
+      table th{background:rgba(65,118,144,.25);font-weight:600;color:var(--admin-text);}
+      table tr:nth-child(even){background:rgba(26,35,53,.45);}
+      table tr:nth-child(odd){background:rgba(26,35,53,.25);}
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <div class="card">
+        <h1>Report an issue</h1>
+        <p class="muted">
+          {{ printer.campus_label }} &mdash; {{ printer.make }} {{ printer.model }}<br>
+          {{ printer.building }} / {{ printer.location_in_building }}
+        </p>
+      </div>
+
+      <div class="card">
+        <form method="post">
+          {% csrf_token %}
+          {{ form.requester_name }}
+          {{ form.requester_email }}
+          {% if form.errors %}
+            <div class="alert">Please fix the highlighted items below.</div>
+          {% endif %}
+
+          <label for="{{ form.issue_category.id_for_label }}">Issue category</label>
+          {{ form.issue_category }}
+          {% if form.issue_category.errors %}
+            <div class="field-error">{{ form.issue_category.errors|join:', ' }}</div>
+          {% endif %}
+
+          {{ form.details.label_tag }}
+          {{ form.details }}
+          {% if form.details.errors %}
+            <div class="field-error">{{ form.details.errors|join:', ' }}</div>
+          {% endif %}
+
+          <div class="actions" style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1rem;">
+            <button class="button" type="submit">Submit issue</button>
+            <a class="button secondary" href="{% url 'manager_dashboard' %}">Back to manager dashboard</a>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Recent reports for this printer</h2>
+        {% if recent_issues %}
+          <table>
+            <thead>
+              <tr>
+                <th>Submitted</th>
+                <th>Status</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ticket in recent_issues %}
+                <tr>
+                  <td>{{ ticket.created_at|date:"M j, g:i a" }}</td>
+                  <td>{{ ticket.status }}</td>
+                  <td>{{ ticket.details|linebreaksbr }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="muted">No recorded issues for this device.</p>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

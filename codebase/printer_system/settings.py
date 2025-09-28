@@ -148,3 +148,7 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@berea.local")
 EMAIL_TO = [e.strip() for e in os.getenv("EMAIL_TO", "").split(",") if e.strip()]
 
 
+
+LOGIN_URL = 'admin:login'
+LOGOUT_REDIRECT_URL = 'admin:login'
+

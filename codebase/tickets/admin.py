@@ -72,6 +72,7 @@ class InventoryItemAdmin(admin.ModelAdmin):
 class PrinterGroupAdmin(admin.ModelAdmin):
     list_display = ('name', 'building', 'member_count')
     search_fields = ('name', 'building')
+    filter_horizontal = ('managers',)
 
     def member_count(self, obj):
         return obj.printers.count()
@@ -221,5 +222,6 @@ class RequestTicketAdmin(AdminCSSMixin, admin.ModelAdmin):
 admin.site.site_header = "Berea College Printing Services"
 admin.site.site_title = "Berea College Admin Portal"
 admin.site.index_title = "Welcome to Berea College Printing Services Admin"
+
 
 

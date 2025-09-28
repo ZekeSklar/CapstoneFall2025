@@ -2,129 +2,57 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>{{ printer.campus_label }} - Request</title>
+    <title>{{ printer.campus_label }} - Printer Portal</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;}
-      .card{border:1px solid #ddd;border-radius:8px;padding:1rem;margin-bottom:1rem;}
-      .row{display:flex;gap:1rem}
-      .row>div{flex:1}
-      label{display:block;font-weight:600;margin-top:.75rem}
-      input,select,textarea{width:100%;padding:.5rem;border:1px solid #ccc;border-radius:6px}
-      button{margin-top:1rem;padding:.6rem 1rem;border:0;border-radius:6px;background:#1e40af;color:#fff;font-weight:600;cursor:pointer}
-      .muted{color:#666}.hidden{display:none}
-      .alert{background:#fee2e2;border:1px solid #dc2626;color:#991b1b;padding:.75rem;border-radius:6px;margin-bottom:1rem}
-      .field-error{color:#b91c1c;font-size:.9rem;margin-top:.25rem}
-      ul.printer-list{padding-left:1.2rem;margin:.25rem 0 0 0}
+      :root{
+        --bg:#080b12;
+        --card:#121722;
+        --border:#1d2433;
+        --text:#e6ecff;
+        --muted:#9aa3b8;
+        --primary:#0b5cd6;
+        --secondary:#0c7c59;
+        --disabled:#233047;
+      }
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:2.5rem 1.25rem;}
+      .card{max-width:720px;margin:0 auto 1.5rem;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.75rem;box-shadow:0 6px 14px rgba(8,11,18,.35);}
+      h1,h2{margin:0 0 .75rem;font-weight:600;color:var(--text);}
+      .muted{color:var(--muted);font-size:.95rem;}
+      .button{display:inline-flex;align-items:center;justify-content:center;margin-top:.85rem;padding:.7rem 1.35rem;border-radius:6px;text-decoration:none;font-weight:600;color:#fff;border:1px solid transparent;transition:filter .15s ease;}
+      .button.order{background:var(--primary);border-color:var(--primary);}
+      .button.issue{background:var(--secondary);border-color:var(--secondary);}
+      .button.disabled{background:var(--disabled);border-color:var(--disabled);cursor:not-allowed;}
+      .button:hover:not(.disabled){filter:brightness(1.05);}
+      .note{font-size:.95rem;color:var(--muted);margin-top:.6rem;}
     </style>
   </head>
   <body>
     <div class="card">
-      <h1 style="margin:.2rem 0">{{ printer.campus_label }} - {{ printer.asset_tag }}</h1>
+      <h1>{{ printer.campus_label }} - {{ printer.asset_tag }}</h1>
       <p class="muted">
         {{ printer.make }} {{ printer.model }} | {{ printer.building }} / {{ printer.location_in_building }}
-        {% if printer.ip_address %} | IP {{ printer.ip_address }}{% endif %} | MAC {{ printer.mac_address }}
       </p>
-      {% if group_printers %}
-        <p class="muted" style="margin-top:.5rem">
-          Group printers in {% firstof printer.group.name printer.group.building "this group" %}:
-        </p>
-        <ul class="printer-list">
-          {% for gp in group_printers %}
-            <li>{{ gp.campus_label }} - {{ gp.asset_tag }} ({{ gp.location_in_building }})</li>
-          {% endfor %}
-        </ul>
+    </div>
+
+    <div class="card">
+      <h2>Order Supplies (Staff Only)</h2>
+      <p class="muted">Printing Services staff can request toner, staples, or other consumables for this device.</p>
+      {% if can_order %}
+        <a class="button order" href="{% url 'printer_order' printer.qr_token %}">Order Supplies</a>
+      {% elif request.user.is_authenticated %}
+        <a class="button order disabled" aria-disabled="true">Order Supplies</a>
+        <p class="note">You must have staff access to order supplies.</p>
+      {% else %}
+        <a class="button order" href="{% url 'printer_order' printer.qr_token %}">Order Supplies</a>
+        <p class="note">You'll be asked to sign in with your staff account before ordering supplies.</p>
       {% endif %}
     </div>
 
     <div class="card">
-      <form method="post">
-        {% csrf_token %}
-        {% if form.errors %}
-          <div class="alert">Please fix the items highlighted below.</div>
-        {% endif %}
-
-        <label for="type">Request type</label>
-          <select name="type" id="type">
-          <option value="SUPPLY" {% if selected_type == "SUPPLY" %}selected{% endif %}>Order supplies</option>
-          <option value="ISSUE" {% if selected_type == "ISSUE" %}selected{% endif %}>Report an issue</option>
-          </select>
-        {% if form.type.errors %}
-          <div class="field-error">{{ form.type.errors|join:', ' }}</div>
-        {% endif %}
-
-        <div id="supplyFields">
-          <label for="supply_type">Supply type</label>
-          <input type="text" name="supply_type" id="supply_type" placeholder="e.g., Black toner T-FC415U-K" value="{{ form.supply_type.value|default_if_none:'' }}">
-          {% if form.supply_type.errors %}
-            <div class="field-error">{{ form.supply_type.errors|join:', ' }}</div>
-          {% endif %}
-          <label for="supply_quantity">Quantity</label>
-          <input type="number" name="supply_quantity" id="supply_quantity" min="1" value="{{ form.supply_quantity.value|default_if_none:'1' }}">
-          {% if form.supply_quantity.errors %}
-            <div class="field-error">{{ form.supply_quantity.errors|join:', ' }}</div>
-          {% endif %}
-        </div>
-
-        <div id="issueFields" class="hidden">
-          <label for="issue_category">Issue category</label>
-            <select name="issue_category" id="issue_category">
-              <option value="">-- Select --</option>
-              <option value="PAPER_JAM" {% if selected_issue == "PAPER_JAM" %}selected{% endif %}>Paper jam</option>
-              <option value="PRINT_QUALITY" {% if selected_issue == "PRINT_QUALITY" %}selected{% endif %}>Print quality</option>
-              <option value="ERROR_CODE" {% if selected_issue == "ERROR_CODE" %}selected{% endif %}>Error code on panel</option>
-              <option value="OTHER" {% if selected_issue == "OTHER" %}selected{% endif %}>Other</option>
-            </select>
-          {% if form.issue_category.errors %}
-            <div class="field-error">{{ form.issue_category.errors|join:', ' }}</div>
-          {% endif %}
-        </div>
-
-        <div class="row">
-          <div>
-            <label for="requester_name">Your name (optional)</label>
-            <input type="text" name="requester_name" id="requester_name" value="{{ form.requester_name.value|default_if_none:'' }}">
-            {% if form.requester_name.errors %}
-              <div class="field-error">{{ form.requester_name.errors|join:', ' }}</div>
-            {% endif %}
-          </div>
-          <div>
-            <label for="requester_email">Your email (optional)</label>
-            <input type="email" name="requester_email" id="requester_email" placeholder="name@berea.edu" value="{{ form.requester_email.value|default_if_none:'' }}">
-            {% if form.requester_email.errors %}
-              <div class="field-error">{{ form.requester_email.errors|join:', ' }}</div>
-            {% endif %}
-          </div>
-        </div>
-
-        <label for="details">Additional details (optional)</label>
-        <textarea name="details" id="details" rows="4" placeholder="Anything else we should know?">{{ form.details.value|default_if_none:'' }}</textarea>
-        {% if form.details.errors %}
-          <div class="field-error">{{ form.details.errors|join:', ' }}</div>
-        {% endif %}
-
-        {% if form.has_group %}
-          <label style="display:flex;align-items:center;gap:.5rem;margin-top:1rem;font-weight:500">
-            <input type="checkbox" name="apply_to_group" id="apply_to_group" value="on" {% if form.apply_to_group.value %}checked{% endif %}>
-            {{ form.apply_to_group.label }}
-          </label>
-          <p class="muted" style="margin-top:.25rem">Group-wide requests require an email and may be limited to authorized staff.</p>
-          {% if form.apply_to_group.errors %}
-            <div class="field-error">{{ form.apply_to_group.errors|join:', ' }}</div>
-          {% endif %}
-        {% endif %}
-
-        <button type="submit">Submit</button>
-      </form>
+      <h2>Report an Issue</h2>
+      <p class="muted">Students and staff can report printer problems here so the support team can help.</p>
+      <a class="button issue" href="{% url 'printer_issue' printer.qr_token %}">Report an Issue</a>
     </div>
-
-    <script>
-      const typeSel = document.getElementById('type');
-      const supply = document.getElementById('supplyFields');
-      const issue = document.getElementById('issueFields');
-      function sync(){ if(typeSel.value==='SUPPLY'){supply.classList.remove('hidden');issue.classList.add('hidden');}
-                       else{issue.classList.remove('hidden');supply.classList.add('hidden');}}
-      typeSel.addEventListener('change', sync); sync();
-    </script>
   </body>
 </html>
