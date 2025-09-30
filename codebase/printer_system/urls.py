@@ -24,6 +24,7 @@ from tickets.views import (
     manager_printer_order,
     printer_issue,
     printer_order,
+    printer_paper_order,
     printer_portal,
     ticket_thanks,
 )
@@ -38,6 +39,7 @@ urlpatterns = [
     path('manager/printers/<int:printer_id>/issue/', manager_printer_issue, name='manager_printer_issue'),
     path('p/<str:qr_token>/', printer_portal, name='printer_portal'),
     path('p/<str:qr_token>/order/', printer_order, name='printer_order'),
+    path('p/<str:qr_token>/paper/', printer_paper_order, name='printer_paper_order'),
     path('p/<str:qr_token>/issue/', printer_issue, name='printer_issue'),
     path('thanks/', ticket_thanks, name='ticket_thanks'),
 ]

@@ -250,6 +250,78 @@ def printer_order(request, qr_token):
 
     })
 
+@login_required(login_url=reverse_lazy('admin:login'))
+def printer_paper_order(request, qr_token):
+    printer = get_object_or_404(Printer.objects.select_related('group'), qr_token=qr_token)
+    if not request.user.is_staff:
+        raise PermissionDenied("Supply ordering is restricted to staff.")
+
+    group_param = request.GET.get('group')
+    target_group = None
+    if group_param:
+        target_group = _get_managed_group(request.user, group_param)
+        if not printer.group or str(printer.group_id) != str(target_group.id):
+            raise PermissionDenied("This printer is not part of the requested group.")
+
+    initial_items = [{'supply_type': 'Copy paper (case)', 'supply_quantity': 1}]
+    allow_item_add = False
+
+    if request.method == 'POST':
+        items_formset = SupplyItemFormSet(request.POST, prefix='items')
+        for form in items_formset.forms:
+            form.fields['supply_type'].widget.input_type = 'hidden'
+        form = SupplyRequestForm(
+            request.POST,
+            printer=printer,
+            user=request.user,
+            manager_override=False,
+            force_apply_to_group=bool(target_group),
+        )
+        if form.is_valid() and items_formset.is_valid():
+            ticket = form.save(commit=False)
+            ticket.printer = printer
+            ticket.type = RequestTicket.SUPPLY
+            ticket.applies_to_group = bool(target_group)
+            ticket.group = target_group if target_group else None
+
+            extra = []
+            for idx, item in enumerate([item for item in items_formset.cleaned_data if item], start=1):
+                if not item:
+                    continue
+                item['supply_type'] = 'Copy paper (case)'
+                extra.append(f"Item {idx}: {item['supply_type']} (qty {item['supply_quantity']})")
+
+            ticket.details = _combine_details(form.cleaned_data.get('details'), extra)
+            ticket.save()
+
+            scope_label = 'Group order' if ticket.applies_to_group else 'Single printer'
+            _send_ticket_email(ticket, printer, scope_label)
+            messages.success(request, 'Paper order submitted to Printing Services.')
+            return redirect('ticket_thanks')
+    else:
+        items_formset = SupplyItemFormSet(prefix='items', initial=initial_items)
+        for form in items_formset.forms:
+            form.fields['supply_type'].widget.input_type = 'hidden'
+        initial_data = {
+            'requester_name': (request.user.get_full_name() or '').strip() or request.user.get_username(),
+            'requester_email': request.user.email or ''
+        }
+        form = SupplyRequestForm(
+            printer=printer,
+            user=request.user,
+            manager_override=False,
+            force_apply_to_group=bool(target_group),
+            initial=initial_data,
+        )
+
+    return render(request, 'tickets/paper_form.html', {
+        'printer': printer,
+        'group': target_group,
+        'form': form,
+        'items_formset': items_formset,
+        'allow_item_add': allow_item_add,
+    })
+
 
 
 
@@ -334,14 +406,22 @@ def manager_dashboard(request):
 
 
 
-    display_name = (request.user.get_full_name() or '').strip() or request.user.get_username()
-    context = {
-        'display_name': display_name,
-        'groups': groups,
-        'recent_issues': recent_issues,
-        'missing_email': not bool(request.user.email),
-    }
-    return render(request, 'tickets/manager_dashboard.html', context)
+    display_name = (request.user.get_full_name() or '').strip() or request.user.get_username()
+
+    context = {
+
+        'display_name': display_name,
+
+        'groups': groups,
+
+        'recent_issues': recent_issues,
+
+        'missing_email': not bool(request.user.email),
+
+    }
+
+    return render(request, 'tickets/manager_dashboard.html', context)
+
 
 
 
@@ -642,21 +722,13 @@ def manager_group_quick_paper(request, group_id):
 
     group = _get_managed_group(request.user, group_id)
 
-    items_initial = [{'supply_type': 'Copy paper (case)', 'supply_quantity': 1}]
+    primary = group.printers.order_by('campus_label').first()
+    if not primary:
+        messages.error(request, 'This group does not have any printers assigned yet.')
+        return redirect('manager_dashboard')
 
-    return _handle_group_order_request(
-
-        request,
-
-        group,
-
-        items_initial=items_initial,
-
-        allow_item_add=False,
-
-        success_message='Paper request submitted to Printing Services.',
-
-    )
+    url = reverse('printer_paper_order', args=[primary.qr_token])
+    return redirect(f"{url}?group={group.id}")
 
 
 

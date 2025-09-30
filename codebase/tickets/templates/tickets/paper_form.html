@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Order Paper - {{ printer.campus_label }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root{
+        --bg:#080b12;
+        --card:#121722;
+        --border:#1d2433;
+        --text:#e6ecff;
+        --muted:#9aa3b8;
+        --primary:#0b5cd6;
+        --secondary:#0c7c59;
+        --danger-bg:rgba(249,115,115,.12);
+        --danger-border:rgba(249,115,115,.45);
+      }
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:2.5rem 1.25rem;}
+      .card{max-width:720px;margin:0 auto 1.5rem;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.75rem;box-shadow:0 6px 14px rgba(8,11,18,.35);}
+      h1{margin:0 0 .75rem;font-size:1.7rem;font-weight:600;}
+      .muted{color:var(--muted);}
+      label{display:block;font-weight:600;margin-top:.85rem;color:var(--text);}
+      input,textarea{width:100%;padding:.65rem;border:1px solid #273246;border-radius:6px;font-size:1rem;background:#0f141f;color:var(--text);}      
+      input:focus,textarea:focus{outline:2px solid rgba(11,92,214,.45);border-color:rgba(11,92,214,.65);}
+      .button{display:inline-flex;align-items:center;justify-content:center;margin-top:1rem;padding:.7rem 1.3rem;border-radius:6px;text-decoration:none;color:#fff;font-weight:600;border:0;background:var(--primary);cursor:pointer;transition:filter .15s ease;}
+      .button.secondary{background:var(--secondary);margin-right:.75rem;}
+      .button:hover{filter:brightness(1.05);}
+      .alert{background:var(--danger-bg);border:1px solid var(--danger-border);color:rgba(249,115,115,.95);padding:.85rem;border-radius:8px;margin-bottom:1rem}
+      .field-error{color:rgba(249,115,115,.95);font-size:.9rem;margin-top:.35rem}
+      .item-card{border:1px solid var(--border);border-radius:8px;padding:.9rem;margin-top:.9rem;background:#1a2335}
+      .item-card h3{margin:0 0 .6rem;font-size:1rem;color:var(--text)}
+      .item-grid{display:flex;gap:1rem;flex-wrap:wrap}
+      .item-grid>div{flex:1 1 220px}
+      .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.55rem .85rem;border-radius:999px;background:rgba(11,92,214,.18);color:var(--text);font-weight:600;}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Order paper for {{ printer.campus_label }}</h1>
+      <p class="muted">
+        {{ printer.make }} {{ printer.model }} | {{ printer.building }} / {{ printer.location_in_building }}
+      </p>
+      {% if group %}
+        <p class="muted">This request will cover every printer in {{ group.name }}.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <form method="post">
+        {% csrf_token %}
+        {% if form.errors or items_formset.non_form_errors %}
+          <div class="alert">
+            Please fix the highlighted items below.
+            {% if items_formset.non_form_errors %}
+              {{ items_formset.non_form_errors }}
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {{ items_formset.management_form }}
+        {% for item_form in items_formset %}
+          <div class="item-card">
+            <h3>Item {{ forloop.counter }}</h3>
+            {{ item_form.supply_type.as_hidden }}
+            <div class="pill">Copy paper (case)</div>
+            <div class="item-grid">
+              <div>
+                <label for="{{ item_form.supply_quantity.id_for_label }}">Quantity</label>
+                {{ item_form.supply_quantity }}
+                {% if item_form.supply_quantity.errors %}
+                  <div class="field-error">{{ item_form.supply_quantity.errors|join:', ' }}</div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+
+        <label for="{{ form.requester_name.id_for_label }}">Your name (optional)</label>
+        {{ form.requester_name }}
+        {% if form.requester_name.errors %}
+          <div class="field-error">{{ form.requester_name.errors|join:', ' }}</div>
+        {% endif %}
+
+        <label for="{{ form.requester_email.id_for_label }}">Your Berea email (required)</label>
+        {{ form.requester_email }}
+        {% if form.requester_email.errors %}
+          <div class="field-error">{{ form.requester_email.errors|join:', ' }}</div>
+        {% endif %}
+
+        <label for="details">Additional notes (optional)</label>
+        <textarea name="details" id="details" rows="4" placeholder="Anything else we should know?">{{ form.details.value|default_if_none:'' }}</textarea>
+        {% if form.details.errors %}
+          <div class="field-error">{{ form.details.errors|join:', ' }}</div>
+        {% endif %}
+
+        <button class="button" type="submit">Submit paper order</button>
+      </form>
+    </div>
+  </body>
+</html>

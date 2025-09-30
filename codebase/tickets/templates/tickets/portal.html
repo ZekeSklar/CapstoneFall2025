@@ -50,6 +50,20 @@
     </div>
 
     <div class="card">
+      <h2>Order Paper (Staff Only)</h2>
+      <p class="muted">Need copy paper? Use this shortcut for faster requests.</p>
+      {% if can_order %}
+        <a class="button order" href="{% url 'printer_paper_order' printer.qr_token %}">Order Paper</a>
+      {% elif request.user.is_authenticated %}
+        <a class="button order disabled" aria-disabled="true">Order Paper</a>
+        <p class="note">You must have staff access to order supplies.</p>
+      {% else %}
+        <a class="button order" href="{% url 'printer_paper_order' printer.qr_token %}">Order Paper</a>
+        <p class="note">You'll be asked to sign in with your staff account before ordering.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
       <h2>Report an Issue</h2>
       <p class="muted">Students and staff can report printer problems here so the support team can help.</p>
       <a class="button issue" href="{% url 'printer_issue' printer.qr_token %}">Report an Issue</a>
