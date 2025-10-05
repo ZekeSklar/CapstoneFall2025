@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib import messages
 
 from django.contrib.auth.decorators import login_required
@@ -9,14 +11,19 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 
 from django.core.mail import send_mail
+from django.http import JsonResponse
 
 from django.conf import settings
+from django.views.decorators.http import require_GET
+
+from django.utils import timezone
 
 
 
 from .models import Printer, PrinterGroup, RequestTicket
 
 from .forms import SupplyRequestForm, IssueReportForm, SupplyItemFormSet
+from .printer_status import POLL_INTERVAL_SECONDS, ensure_latest_status, build_status_payload
 
 
 
@@ -92,6 +99,29 @@ def _send_ticket_email(ticket: RequestTicket, printer: Printer, scope_label: str
 
 
 
+ISSUE_RATE_LIMIT_MAX = 3
+
+ISSUE_RATE_LIMIT_WINDOW = timedelta(hours=1)
+
+
+def _issue_rate_limit_reached(printer: Printer) -> bool:
+
+    window_start = timezone.now() - ISSUE_RATE_LIMIT_WINDOW
+
+    recent_count = RequestTicket.objects.filter(
+
+        printer=printer,
+
+        type=RequestTicket.ISSUE,
+
+        created_at__gte=window_start,
+
+    ).count()
+
+    return recent_count >= ISSUE_RATE_LIMIT_MAX
+
+
+
 def _user_can_manage_printer(user, printer: Printer) -> bool:
 
     if not printer.group:
@@ -106,7 +136,7 @@ def _user_can_manage_printer(user, printer: Printer) -> bool:
 
 def _managed_groups_queryset(user):
 
-    return user.managed_printer_groups.prefetch_related("printers").order_by("name")
+    return user.managed_printer_groups.prefetch_related("printers", "printers__status").order_by("name")
 
 
 
@@ -126,6 +156,17 @@ def _get_managed_group(user, group_id: int) -> PrinterGroup:
 
 
 
+
+_TRUTHY_QUERY_VALUES = {'1', 'true', 'yes', 'y', 'on', 'force', 'now'}
+
+
+def _query_flag(request, name: str) -> bool:
+    value = request.GET.get(name)
+    if value is None:
+        return False
+    return value.strip().lower() in _TRUTHY_QUERY_VALUES
+
+
 def printer_portal(request, qr_token):
 
     printer = get_object_or_404(Printer, qr_token=qr_token)
@@ -142,19 +183,72 @@ def printer_portal(request, qr_token):
 
 
 
-    return render(request, 'tickets/portal.html', {
-
-        'printer': printer,
-
-        'group_printers': group_printers,
-
-        'can_order': can_order,
-
-    })
-
-
+    return render(
+        request,
+        'tickets/portal.html',
+        {
+            'printer': printer,
+            'group_printers': group_printers,
+            'can_order': can_order,
+        },
+    )
 
 
+@login_required
+@require_GET
+@login_required
+@require_GET
+def manager_printer_status(request, printer_id):
+    """Manager-only status endpoint (by printer id). Returns same shape as manager feed.
+
+    Useful when showing live status in non-QR parts of the site (requires login
+    and group management permission).
+    """
+    printer = get_object_or_404(Printer.objects.select_related('group'), pk=printer_id)
+    if not _user_can_manage_printer(request.user, printer):
+        raise PermissionDenied('You are not assigned to this printer.')
+
+    force = _query_flag(request, 'force') or _query_flag(request, 'refresh')
+    status = ensure_latest_status(printer, force=force)
+    payload = build_status_payload(printer, status)
+    # Return same top-level shape as manager_status_feed uses
+    resp = JsonResponse({'printers': [payload], 'poll_interval_seconds': POLL_INTERVAL_SECONDS})
+    resp['Cache-Control'] = 'no-store'
+    return resp
+@login_required
+@require_GET
+def manager_status_feed(request):
+
+    force = _query_flag(request, 'force') or _query_flag(request, 'refresh')
+    printer_id = request.GET.get('printer')
+
+    payloads: list[dict] = []
+
+    if printer_id:
+
+        printer = get_object_or_404(Printer.objects.select_related('group'), pk=printer_id)
+
+        if not _user_can_manage_printer(request.user, printer):
+
+            raise PermissionDenied('You are not assigned to this printer.')
+
+        status = ensure_latest_status(printer, force=force)
+        payloads.append(build_status_payload(printer, status))
+
+    else:
+
+        groups = list(_managed_groups_queryset(request.user))
+
+        for group in groups:
+
+            for printer in group.printers.all():
+
+                status = ensure_latest_status(printer, force=force)
+                payloads.append(build_status_payload(printer, status))
+
+    resp = JsonResponse({'printers': payloads, 'poll_interval_seconds': POLL_INTERVAL_SECONDS})
+    resp['Cache-Control'] = 'no-store'
+    return resp
 
 @login_required(login_url=reverse_lazy('admin:login'))
 
@@ -336,6 +430,10 @@ def printer_issue(request, qr_token):
 
         if form.is_valid():
 
+            if _issue_rate_limit_reached(printer):
+
+                return redirect(reverse('ticket_thanks'))
+
             ticket = form.save(commit=False)
 
             ticket.printer = printer
@@ -353,8 +451,6 @@ def printer_issue(request, qr_token):
             ticket.details = _combine_details(form.cleaned_data.get('details'), extra)
 
             ticket.save()
-
-
 
             _send_ticket_email(ticket, printer, scope_label='Single printer')
 
@@ -384,9 +480,27 @@ def manager_dashboard(request):
 
     groups = list(_managed_groups_queryset(request.user))
 
+    status_payloads: list[dict] = []
+    attention_labels: list[str] = []
+    snmp_fault_labels: list[str] = []
+
+    for group in groups:
+        for printer in group.printers.all():
+            status = ensure_latest_status(printer)
+            payload = build_status_payload(printer, status)
+            status_payloads.append(payload)
+            printer.status_payload = payload
+
+            status_data = payload.get('status', {})
+            if status_data.get('attention'):
+                attention_labels.append(payload['printer']['campus_label'])
+            if not status_data.get('snmp_ok', True):
+                snmp_fault_labels.append(payload['printer']['campus_label'])
+
+    attention_labels.sort()
+    snmp_fault_labels.sort()
+
     group_ids = [group.id for group in groups]
-
-
 
     recent_issues = []
 
@@ -418,9 +532,23 @@ def manager_dashboard(request):
 
         'missing_email': not bool(request.user.email),
 
+        'printer_status_payloads': status_payloads,
+
+        'attention_count': len(attention_labels),
+
+        'attention_labels': attention_labels,
+
+        'snmp_fault_count': len(snmp_fault_labels),
+
+        'snmp_fault_labels': snmp_fault_labels,
+
+        'poll_interval_seconds': POLL_INTERVAL_SECONDS,
+
     }
 
     return render(request, 'tickets/manager_dashboard.html', context)
+
+
 
 
 
@@ -782,6 +910,12 @@ def manager_printer_issue(request, printer_id):
 
         if form.is_valid():
 
+            if _issue_rate_limit_reached(printer):
+
+                messages.success(request, 'Issue reported to Printing Services.')
+
+                return redirect('manager_dashboard')
+
             ticket = form.save(commit=False)
 
             ticket.printer = printer
@@ -799,8 +933,6 @@ def manager_printer_issue(request, printer_id):
             ticket.details = _combine_details(form.cleaned_data.get('details'), extra)
 
             ticket.save()
-
-
 
             _send_ticket_email(ticket, printer, scope_label='Single printer')
 

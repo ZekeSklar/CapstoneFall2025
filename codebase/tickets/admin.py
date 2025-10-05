@@ -3,12 +3,56 @@ from import_export.admin import ImportExportModelAdmin
 from django.db import models
 # Custom admin index view to inject low inventory notifications
 from django.contrib import admin
-from django.urls import path
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django.urls import path, reverse
 from django.template.response import TemplateResponse
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 import csv
-from .models import Printer, RequestTicket, InventoryItem, PrinterComment, PrinterGroup
+from .printer_status import POLL_INTERVAL_SECONDS, ensure_latest_status, build_status_payload
+from .models import (
+    InventoryItem,
+    IssueSummaryRecipient,
+    Printer,
+    PrinterComment,
+    PrinterGroup,
+    RequestTicket,
+)
 # Inline for PrinterComment
+User = get_user_model()
+
+
+_ADMIN_TRUTHY_VALUES = {'1', 'true', 'yes', 'y', 'on', 'force', 'now'}
+class IssueSummaryRecipientInline(admin.StackedInline):
+    model = IssueSummaryRecipient
+    fields = ("subscribed",)
+    extra = 0
+    max_num = 1
+    verbose_name = "Daily issue summary subscription"
+    verbose_name_plural = "Daily issue summary subscription"
+
+    def get_extra(self, request, obj=None, **kwargs):
+        if obj and hasattr(obj, 'issue_summary_recipient'):
+            return 0
+        return 1
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request, obj=None):
+        if not request.user.is_superuser:
+            return False
+        if obj and hasattr(obj, 'issue_summary_recipient'):
+            return False
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+
 class PrinterCommentInline(admin.TabularInline):
     model = PrinterComment
     extra = 1
@@ -35,7 +79,7 @@ class CustomAdminSite(admin.AdminSite):
     def index(self, request, extra_context=None):
         low_inventory_items = InventoryItem.objects.filter(quantity_on_hand__lte=models.F('reorder_threshold'))
         # Missing data summary for printers
-        from .models import Printer
+        from .models import Printer, PrinterStatus
         generic_values = {
             'mac_address': 'UNKNOWN-MACADDRESS',
             'ip_address': '0.0.0.0',
@@ -52,10 +96,27 @@ class CustomAdminSite(admin.AdminSite):
             count = Printer.objects.filter(**{field: unknown}).count()
             if count > 0:
                 missing_summary[field] = count
+
+        status_qs = PrinterStatus.objects.select_related('printer').filter(
+            models.Q(attention=True) | models.Q(snmp_ok=False)
+        ).order_by('printer__campus_label')
+        alert_total = status_qs.count()
+        printer_status_alerts = list(status_qs[:20])
+        alert_overflow = max(alert_total - len(printer_status_alerts), 0)
+        attention_total = PrinterStatus.objects.filter(attention=True).count()
+        snmp_fault_total = PrinterStatus.objects.filter(snmp_ok=False).count()
+
         if extra_context is None:
             extra_context = {}
         extra_context['low_inventory_items'] = low_inventory_items
         extra_context['missing_data_summary'] = missing_summary
+        extra_context['printer_status_alerts'] = printer_status_alerts
+        extra_context['printer_status_alert_total'] = alert_total
+        extra_context['printer_status_alert_overflow'] = alert_overflow
+        extra_context['printer_status_summary'] = {
+            'attention_total': attention_total,
+            'snmp_fault_total': snmp_fault_total,
+        }
         return super().index(request, extra_context=extra_context)
 
 # Swap out the default admin site for the custom one
@@ -101,6 +162,7 @@ class PrinterResource(resources.ModelResource):
 
 @admin.register(Printer)
 class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
+    change_form_template = 'admin/tickets/printer/change_form.html'
     resource_class = PrinterResource
     inlines = [PrinterCommentInline]
     list_display = (
@@ -120,6 +182,42 @@ class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
     ordering = ("campus_label",)
     list_per_page = 50
     actions = ["export_printers_csv"]
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path('<path:object_id>/status/', self.admin_site.admin_view(self.printer_status_view), name='tickets_printer_status'),
+        ]
+        return custom + urls
+
+    def printer_status_view(self, request, object_id):
+        printer = self.get_object(request, object_id)
+        if printer is None:
+            from django.http import Http404
+            raise Http404('Printer not found')
+        force_flag = request.GET.get('force') or request.GET.get('refresh')
+        force = bool(force_flag and force_flag.strip().lower() in _ADMIN_TRUTHY_VALUES)
+        status = ensure_latest_status(printer, force=force)
+        payload = build_status_payload(printer, status)
+        resp = JsonResponse(payload)
+        resp['Cache-Control'] = 'no-store'
+        return resp
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        status_payload = None
+        status_endpoint = None
+        if object_id:
+            printer = self.get_object(request, object_id)
+            if printer is not None:
+                status = ensure_latest_status(printer)
+                status_payload = build_status_payload(printer, status)
+                status_endpoint = reverse('admin:tickets_printer_status', args=[object_id])
+        extra_context.update({
+            'printer_status_payload': status_payload,
+            'poll_interval_seconds': POLL_INTERVAL_SECONDS,
+            'printer_status_endpoint': status_endpoint,
+        })
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
     def save_formset(self, request, form, formset, change):
         instances = formset.save(commit=False)
@@ -217,6 +315,24 @@ class RequestTicketAdmin(AdminCSSMixin, admin.ModelAdmin):
                 (t.details or "").replace("\r\n", " ").replace("\n", " "),
             ])
         return resp
+
+
+
+class IssueSummaryUserAdmin(DjangoUserAdmin):
+    inlines = [IssueSummaryRecipientInline]
+
+    def get_inline_instances(self, request, obj=None):
+        if not request.user.is_superuser or obj is None:
+            return []
+        return super().get_inline_instances(request, obj)
+
+
+try:
+    admin.site.unregister(User)
+except admin.sites.NotRegistered:  # pragma: no cover
+    pass
+
+admin.site.register(User, IssueSummaryUserAdmin)
 
 # ---- Custom Admin Branding ----
 admin.site.site_header = "Berea College Printing Services"

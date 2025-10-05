@@ -223,3 +223,80 @@ class RequestTicket(models.Model):
         scope = 'group' if self.applies_to_group else 'single'
         return f"[{self.type}] {self.printer.campus_label} ({scope}) | {self.status}"
 
+class IssueSummaryState(models.Model):
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Issue summary state'
+        verbose_name_plural = 'Issue summary state'
+
+    def __str__(self):
+        if self.last_sent_at:
+            return f"Issue summary last sent at {self.last_sent_at:%Y-%m-%d %H:%M:%S}"
+        return 'Issue summary has not been sent yet'
+
+class IssueSummaryRecipient(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='issue_summary_recipient')
+    subscribed = models.BooleanField(
+        'Receive daily issue summary',
+        default=True,
+        help_text='Receive the daily printer issue summary email.',
+    )
+
+    class Meta:
+        verbose_name = 'Issue summary recipient'
+        verbose_name_plural = 'Issue summary recipients'
+
+    def __str__(self):
+        name = self.user.get_full_name() or self.user.get_username()
+        return f"{name} ({self.user.email})" if self.user.email else name
+
+class PrinterStatus(models.Model):
+    printer = models.OneToOneField(Printer, on_delete=models.CASCADE, related_name='status')
+    status_code = models.PositiveSmallIntegerField(default=0)
+    status_label = models.CharField(max_length=50, blank=True)
+    device_status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    device_status_label = models.CharField(max_length=50, blank=True)
+    error_state_raw = models.CharField(max_length=16, blank=True)
+    error_flags = models.JSONField(default=list, blank=True)
+    alerts = models.JSONField(default=list, blank=True)
+    supplies = models.JSONField(default=list, blank=True)
+    attention = models.BooleanField(default=False)
+    snmp_ok = models.BooleanField(default=True)
+    snmp_message = models.CharField(max_length=255, blank=True)
+    fetched_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Printer status'
+        verbose_name_plural = 'Printer statuses'
+
+    def as_dict(self) -> dict:
+        return {
+            'printer_id': self.printer_id,
+            'status_code': self.status_code,
+            'status_label': self.status_label or 'Unknown',
+            'device_status_code': self.device_status_code,
+            'device_status_label': self.device_status_label or '',
+            'error_state_raw': self.error_state_raw or '',
+            'error_flags': list(self.error_flags or []),
+            'alerts': list(self.alerts or []),
+            'supplies': list(self.supplies or []),
+            'attention': bool(self.attention),
+            'snmp_ok': bool(self.snmp_ok),
+            'snmp_message': self.snmp_message or '',
+            'fetched_at': self.fetched_at.isoformat() if self.fetched_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    @property
+    def badge_level(self) -> str:
+        if not self.snmp_ok:
+            return 'error'
+        if self.attention:
+            return 'warning'
+        return 'normal'
+
+
+

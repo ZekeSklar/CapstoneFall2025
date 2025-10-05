@@ -1,0 +1,112 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block content %}
+  <div style="margin-bottom:1.25rem;padding:1rem;border:1px solid #ddd;border-radius:8px;background:#f9fafb;">
+    <h2 style="margin:0 0 .5rem;">Live Device Status</h2>
+    <p style="margin:0 0 .75rem;color:#555;" id="admin-status-updated">Preparing live status...</p>
+    <div id="admin-status-panel">
+      {% if printer_status_payload %}
+        {{ printer_status_payload|json_script:"printer-status-data" }}
+        <div id="admin-status-render"></div>
+      {% else %}
+        <div class="muted">No SNMP status is available for this device.</div>
+      {% endif %}
+    </div>
+    {% if printer_status_endpoint %}
+      <p style="margin-top:.75rem;"><a href="#" id="admin-status-refresh" class="button">Refresh</a></p>
+    {% endif %}
+  </div>
+
+  {{ block.super }}
+
+  {% if printer_status_endpoint %}
+  <script>
+    (function(){
+      const dataEl = document.getElementById('printer-status-data');
+      const renderTarget = document.getElementById('admin-status-render');
+      const updated = document.getElementById('admin-status-updated');
+      const refreshBtn = document.getElementById('admin-status-refresh');
+      const endpoint = '{{ printer_status_endpoint|default:"" }}';
+
+      function fmt(ts){
+        if(!ts) return 'Last checked: just now';
+        try{ return 'Last checked: ' + new Date(ts).toLocaleString(); }catch(e){return 'Last checked: unknown';}
+      }
+
+      function render(payload){
+        if(!payload || !payload.status){ renderTarget.innerHTML = '<div class="muted">No SNMP data returned.</div>'; return; }
+        const s = payload.status;
+        updated.textContent = fmt(s.fetched_at || s.updated_at);
+        const lines = [];
+        lines.push('<div style="display:flex;gap:1rem;flex-wrap:wrap">');
+        lines.push('<div style="padding:.35rem .75rem;border-radius:999px;background:#fde2e2;color:#9b2c2c;">' + (s.snmp_ok? (s.status_label || 'Unknown') : 'Unavailable') + '</div>');
+        lines.push('<div style="padding:.35rem .75rem;border-radius:999px;background:#f0f4ff;color:#1e3a8a;">' + (s.device_status_label || 'Device status unavailable') + '</div>');
+        lines.push('</div>');
+
+        if(s.snmp_message){ lines.push('<p style="color:#9b2c2c;">' + s.snmp_message + '</p>'); }
+
+        // Alerts
+        lines.push('<h4 style="margin:.75rem 0 .25rem">Active Alerts</h4>');
+        if(s.alerts && s.alerts.length){
+          lines.push('<ul>');
+          s.alerts.forEach(a=> lines.push('<li>' + (a.severity||'Alert') + ' - ' + (a.description||'Details unavailable') + '</li>'));
+          lines.push('</ul>');
+        } else {
+          lines.push('<div class="muted">No active alerts reported.</div>');
+        }
+
+        // Error flags
+        lines.push('<h4 style="margin:.75rem 0 .25rem">Error Flags</h4>');
+        if(s.error_flags && s.error_flags.length){
+          lines.push('<ul>');
+          s.error_flags.forEach(f=> lines.push('<li>' + (f.label||f.code||'Unknown') + '</li>'));
+          lines.push('</ul>');
+        } else {
+          lines.push('<div class="muted">No error flags are active.</div>');
+        }
+
+        // Supplies
+        lines.push('<h4 style="margin:.75rem 0 .25rem">Supplies</h4>');
+        if(s.supplies && s.supplies.length){
+          lines.push('<ul>');
+          s.supplies.forEach(sp=> lines.push('<li>' + (sp.description||'Supply') + (sp.percent!=null? (' - ' + Math.round(sp.percent) + '%') : (sp.level!=null? (' - Level ' + sp.level) : '')) + '</li>'));
+          lines.push('</ul>');
+        } else {
+          lines.push('<div class="muted">No consumable readings were returned.</div>');
+        }
+
+        renderTarget.innerHTML = lines.join('');
+      }
+
+      if(dataEl){
+        try{ const payload = JSON.parse(dataEl.textContent); render(payload); }
+        catch(e){ /* ignore */ }
+      }
+
+      async function refresh(force){
+        if(!endpoint) return;
+        let url = endpoint;
+        if (force) {
+          url += (url.indexOf('?')>-1? '&' : '?') + 'force=1';
+        }
+        url += (url.indexOf('?')>-1? '&' : '?') + 't=' + Date.now();
+        try{
+          const r = await fetch(url, { headers:{'Accept':'application/json'} });
+          if(!r.ok) throw new Error('HTTP ' + r.status);
+          const data = await r.json();
+          // manager endpoints return {'printers':[payload], 'poll_interval_seconds':N}
+          if(Array.isArray(data.printers) && data.printers.length){ render(data.printers[0]); }
+          else if(data.status){ render(data); }
+          updated.textContent = 'Last sync: ' + new Date().toLocaleString();
+        }catch(err){ updated.textContent = 'Unable to refresh device status: ' + err.message; }
+      }
+
+      if(refreshBtn){ refreshBtn.addEventListener('click', function(ev){ ev.preventDefault(); refresh(true); }); }
+      // Auto-refresh once on load so the panel updates without a click
+      try { setTimeout(function(){ refresh(true); }, 50); } catch(e) { /* ignore */ }
+    })();
+  </script>
+  {% endif %}
+
+{% endblock %}

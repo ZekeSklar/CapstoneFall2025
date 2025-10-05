@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
 import os
 from dotenv import load_dotenv
 
@@ -57,6 +58,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'tickets.middleware.IssueSummaryMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -146,6 +148,38 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@berea.local")
 
 # Comma-separated list to Python list
 EMAIL_TO = [e.strip() for e in os.getenv("EMAIL_TO", "").split(",") if e.strip()]
+
+
+
+ISSUE_SUMMARY_RECIPIENT = (
+    os.getenv("ISSUE_SUMMARY_RECIPIENT", "").strip()
+    or (EMAIL_TO[0] if EMAIL_TO else "sklarz@berea.edu")
+)
+
+
+
+ISSUE_SUMMARY_INTERVAL_HOURS = int(os.getenv("ISSUE_SUMMARY_INTERVAL_HOURS", "24"))
+
+ISSUE_SUMMARY_INTERVAL = timedelta(hours=ISSUE_SUMMARY_INTERVAL_HOURS)
+
+ISSUE_SUMMARY_INCLUDE_CLOSED = os.getenv("ISSUE_SUMMARY_INCLUDE_CLOSED", "false").lower() == "true"
+
+_LOOKBACK = os.getenv("ISSUE_SUMMARY_LOOKBACK_HOURS", "").strip()
+
+ISSUE_SUMMARY_LOOKBACK_HOURS = int(_LOOKBACK) if _LOOKBACK else None
+
+
+
+
+# --- SNMP / Device Status ---
+# Values are read from .env and surfaced as Django settings so
+# tickets.snmp_client and related code can access them via settings.
+SNMP_COMMUNITY = os.getenv("SNMP_COMMUNITY", "public")
+SNMP_TIMEOUT = int(os.getenv("SNMP_TIMEOUT", "5"))
+SNMP_RETRIES = int(os.getenv("SNMP_RETRIES", "1"))
+SNMP_POLL_INTERVAL_SECONDS = int(os.getenv("SNMP_POLL_INTERVAL_SECONDS", "300"))
+
+
 
 
 
