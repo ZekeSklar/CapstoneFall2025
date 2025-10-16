@@ -209,7 +209,12 @@ class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
         if object_id:
             printer = self.get_object(request, object_id)
             if printer is not None:
-                status = ensure_latest_status(printer)
+                # Do not block page load with live SNMP polling.
+                # Use cached status (if any) and let JS refresh asynchronously.
+                from .models import PrinterStatus
+                status = (
+                    PrinterStatus.objects.filter(printer=printer).first()
+                )
                 status_payload = build_status_payload(printer, status)
                 status_endpoint = reverse('admin:tickets_printer_status', args=[object_id])
         extra_context.update({
