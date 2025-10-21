@@ -29,12 +29,68 @@ class InventoryItem(models.Model):
     quantity_on_hand = models.PositiveIntegerField(default=0)
     reorder_threshold = models.PositiveIntegerField(default=1)
     compatible_printers = models.ManyToManyField('Printer', blank=True)
+    # Optional physical shelf location
+    # Rows are letters (e.g., A, B, ... or AA), columns are numbers (e.g., 1, 2, 10)
+    shelf_row = models.CharField(
+        max_length=3,
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="Shelf row letters (e.g., A, B, AA)."
+    )
+    shelf_column = models.PositiveSmallIntegerField(
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="Shelf column number (e.g., 1, 2, 10)."
+    )
 
     def needs_reorder(self):
         return self.quantity_on_hand <= self.reorder_threshold
 
     def __str__(self):
         return f"{self.name} ({self.category}) [{self.model_number}]"
+
+    # --- Shelf helpers ---
+    @property
+    def shelf_code(self) -> str:
+        """Returns a human-friendly shelf coordinate like 'A-3' or '' if unset."""
+        if not self.shelf_row or self.shelf_column is None:
+            return ""
+        return f"{self.shelf_row}-{self.shelf_column}"
+
+    def _row_number(self) -> int:
+        """Convert row letters (A, B, ..., Z, AA, AB, ...) to a 1-based number.
+
+        This matches spreadsheet-style base-26 encoding: A=1, Z=26, AA=27, AB=28, etc.
+        Returns 0 if row is not set.
+        """
+        if not self.shelf_row:
+            return 0
+        total = 0
+        for ch in self.shelf_row.strip().upper():
+            if 'A' <= ch <= 'Z':
+                total = total * 26 + (ord(ch) - ord('A') + 1)
+            else:
+                # Non-letter encountered; stop processing
+                break
+        return total
+
+    @property
+    def shelf_sort_key(self) -> tuple[int, int, str]:
+        """Key for Python-level sorting: by row (letters), then column (number), then name.
+
+        Useful for in-memory sorts where DB ordering is not enough.
+        """
+        row_num = self._row_number()
+        col_num = self.shelf_column or 0
+        return (row_num, col_num, (self.name or ""))
+
+    def clean(self):
+        # Normalize shelf_row to uppercase letters (if provided)
+        super().clean()
+        if self.shelf_row:
+            self.shelf_row = ''.join(ch for ch in self.shelf_row.strip().upper() if ch.isalpha())[:3]
 
 
 class PrinterGroup(models.Model):

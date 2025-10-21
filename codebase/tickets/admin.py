@@ -8,6 +8,9 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.urls import path, reverse
 from django.template.response import TemplateResponse
 from django.http import Http404, HttpResponse, JsonResponse
+from django.utils.safestring import mark_safe
+from django.utils.html import format_html
+import json
 import csv
 from .printer_status import POLL_INTERVAL_SECONDS, ensure_latest_status, build_status_payload
 from .models import (
@@ -124,9 +127,16 @@ admin.site.__class__ = CustomAdminSite
 # ---------- InventoryItem Admin ----------
 @admin.register(InventoryItem)
 class InventoryItemAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'quantity_on_hand', 'reorder_threshold')
-    list_filter = ('category',)
-    search_fields = ('name',)
+    list_display = (
+        'name', 'category', 'quantity_on_hand', 'reorder_threshold', 'shelf_location',
+    )
+    list_filter = ('category', 'shelf_row')
+    search_fields = ('name', 'model_number', 'shelf_row')
+    ordering = ('shelf_row', 'shelf_column', 'name')
+
+    def shelf_location(self, obj):
+        return obj.shelf_code or '-'
+    shelf_location.short_description = 'Shelf'
 
 
 @admin.register(PrinterGroup)
@@ -162,7 +172,8 @@ class PrinterResource(resources.ModelResource):
 
 @admin.register(Printer)
 class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
-    change_form_template = 'admin/tickets/printer/change_form.html'
+    # Use default change_form layout; we inject the status panel
+    # as a readonly fieldset to keep the sidebar layout intact.
     resource_class = PrinterResource
     inlines = [PrinterCommentInline]
     list_display = (
@@ -182,6 +193,111 @@ class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
     ordering = ("campus_label",)
     list_per_page = 50
     actions = ["export_printers_csv"]
+    # Expose custom HTML panel as a readonly field
+    readonly_fields = ("_live_device_status",)
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        # Append our status panel after main field groups, before inlines
+        extra = ("Live Device Status", {
+            "fields": ("_live_device_status",),
+            "classes": ("wide",),
+        })
+        return fieldsets + (extra,)
+
+    def _live_device_status(self, obj):
+        if not obj:
+            return "Save the printer to view live status."
+        # Build initial payload from cached status; JS will refresh async
+        from .models import PrinterStatus
+        status = PrinterStatus.objects.filter(printer=obj).first()
+        payload = build_status_payload(obj, status)
+        endpoint = reverse('admin:tickets_printer_status', args=[obj.pk])
+
+        # Safely JSON-encode for inline script tag
+        data_json = json.dumps(payload)
+        # Render the panel and inline JS (scoped by unique IDs)
+        html = f'''
+<div style="padding:1rem;border:1px solid #ddd;border-radius:8px;background:#f9fafb;">
+  <p id="admin-status-updated" style="margin:0 0 .75rem;color:#555;">Preparing live status...</p>
+  <div id="admin-status-render"></div>
+  <p style="margin-top:.75rem;"><a href="#" id="admin-status-refresh" class="button">Refresh</a></p>
+</div>
+<script id="printer-status-data" type="application/json">{data_json}</script>
+<script>(function(){{
+  const dataEl = document.getElementById('printer-status-data');
+  const renderTarget = document.getElementById('admin-status-render');
+  const updated = document.getElementById('admin-status-updated');
+  const refreshBtn = document.getElementById('admin-status-refresh');
+  const endpoint = {json.dumps(endpoint)};
+
+  function fmt(ts){{
+    if(!ts) return 'Last checked: just now';
+    try{{ return 'Last checked: ' + new Date(ts).toLocaleString(); }}catch(e){{return 'Last checked: unknown';}}
+  }}
+
+  function render(payload){{
+    if(!payload || !payload.status){{ renderTarget.innerHTML = '<div class="muted">No SNMP data returned.</div>'; return; }}
+    const s = payload.status;
+    updated.textContent = fmt(s.fetched_at || s.updated_at);
+    const lines = [];
+    lines.push('<div style="display:flex;gap:1rem;flex-wrap:wrap">');
+    lines.push('<div style="padding:.35rem .75rem;border-radius:999px;background:#fde2e2;color:#9b2c2c;">' + (s.snmp_ok? (s.status_label || 'Unknown') : 'Unavailable') + '</div>');
+    lines.push('<div style="padding:.35rem .75rem;border-radius:999px;background:#f0f4ff;color:#1e3a8a;">' + (s.device_status_label || 'Device status unavailable') + '</div>');
+    lines.push('</div>');
+    if(s.snmp_message){{ lines.push('<p style="color:#9b2c2c;">' + s.snmp_message + '</p>'); }}
+    lines.push('<h4 style="margin:.75rem 0 .25rem">Active Alerts</h4>');
+    if(s.alerts && s.alerts.length){{
+      lines.push('<ul>');
+      s.alerts.forEach(a=> lines.push('<li>' + (a.severity||'Alert') + ' - ' + (a.description||'Details unavailable') + '</li>'));
+      lines.push('</ul>');
+    }} else {{
+      lines.push('<div class="muted">No active alerts reported.</div>');
+    }}
+    lines.push('<h4 style="margin:.75rem 0 .25rem">Error Flags</h4>');
+    if(s.error_flags && s.error_flags.length){{
+      lines.push('<ul>');
+      s.error_flags.forEach(f=> lines.push('<li>' + (f.label||f.code||'Unknown') + '</li>'));
+      lines.push('</ul>');
+    }} else {{
+      lines.push('<div class="muted">No error flags are active.</div>');
+    }}
+    lines.push('<h4 style="margin:.75rem 0 .25rem">Supplies</h4>');
+    if(s.supplies && s.supplies.length){{
+      lines.push('<ul>');
+      s.supplies.forEach(sp=> lines.push('<li>' + (sp.description||'Supply') + (sp.percent!=null? (' - ' + Math.round(sp.percent) + '%') : (sp.level!=null? (' - Level ' + sp.level) : '')) + '</li>'));
+      lines.push('</ul>');
+    }} else {{
+      lines.push('<div class="muted">No consumable readings were returned.</div>');
+    }}
+    renderTarget.innerHTML = lines.join('');
+  }}
+
+  if(dataEl){{
+    try{{ const payload = JSON.parse(dataEl.textContent); render(payload); }}
+    catch(e){{ /* ignore */ }}
+  }}
+
+  async function refresh(force){{
+    if(!endpoint) return;
+    let url = endpoint;
+    if (force) {{ url += (url.indexOf('?')>-1? '&' : '?') + 'force=1'; }}
+    url += (url.indexOf('?')>-1? '&' : '?') + 't=' + Date.now();
+    try{{
+      const r = await fetch(url, {{ headers:{{'Accept':'application/json'}} }});
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      if(Array.isArray(data.printers) && data.printers.length){{ render(data.printers[0]); }}
+      else if(data.status){{ render(data); }}
+      updated.textContent = 'Last sync: ' + new Date().toLocaleString();
+    }}catch(err){{ updated.textContent = 'Unable to refresh device status: ' + err.message; }}
+  }}
+
+  if(refreshBtn){{ refreshBtn.addEventListener('click', function(ev){{ ev.preventDefault(); refresh(true); }}); }}
+  try {{ setTimeout(function(){{ refresh(true); }}, 50); }} catch(e) {{ /* ignore */ }}
+}})();</script>
+        '''
+        return mark_safe(html)
     def get_urls(self):
         urls = super().get_urls()
         custom = [
