@@ -1,0 +1,504 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Manager Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root{
+        --admin-bg:#080b12;
+        --admin-card:#121722;
+        --admin-border:#1d2433;
+        --admin-text:#e6ecff;
+        --admin-muted:#9aa3b8;
+        --admin-primary:#0b5cd6;
+        --admin-secondary:#0c7c59;
+        --admin-danger:#f97373;
+        --admin-pill:#1a2335;
+      }
+      *{box-sizing:border-box;}
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--admin-bg);color:var(--admin-text);margin:0;padding:2rem 1rem;}
+      .layout{max-width:980px;margin:0 auto;}
+      h1{margin:0 0 1.5rem;font-size:1.9rem;font-weight:600;}
+      .card{background:var(--admin-card);border:1px solid var(--admin-border);border-radius:10px;padding:1.5rem;margin-bottom:1.25rem;box-shadow:0 6px 14px rgba(8,11,18,.35);}
+      .card h2{margin:0;font-size:1.25rem;font-weight:600;color:var(--admin-text);}
+      .muted{color:var(--admin-muted);}
+      a.button,button.button{display:inline-flex;align-items:center;justify-content:center;padding:.55rem 1.1rem;border-radius:6px;text-decoration:none;color:#fff;background:var(--admin-primary);font-weight:600;transition:background .15s ease,filter .15s ease;border:1px solid transparent;cursor:pointer;}
+      a.button.secondary,button.button.secondary{background:var(--admin-secondary);}
+      a.button.small,button.button.small{padding:.45rem .9rem;font-size:.95rem;}
+      a.button:hover,button.button:hover{filter:brightness(1.05);}
+      button.button.tertiary{background:transparent;border-color:rgba(154,163,184,.4);color:var(--admin-muted);}
+      button.button.tertiary:hover{background:rgba(154,163,184,.15);filter:none;color:var(--admin-text);}
+      button.button.loading{opacity:.7;cursor:progress;}
+      .status-controls{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:1.25rem;}
+      ul.printer-list{list-style:none;padding:0;margin:.45rem 0 0 0;}
+      ul.printer-list li{display:flex;flex-wrap:wrap;gap:.75rem;padding:.65rem .75rem;border:1px solid var(--admin-border);border-radius:8px;margin-bottom:.75rem;background:var(--admin-pill);} 
+      ul.printer-list li.attention{border-color:rgba(255,184,76,.45);box-shadow:0 0 0 1px rgba(255,184,76,.25);} 
+      ul.printer-list li.snmp-error{border-color:rgba(249,115,115,.45);box-shadow:0 0 0 1px rgba(249,115,115,.25);} 
+      .printer-info{flex:1 1 320px;min-width:280px;} 
+      .actions{display:flex;gap:.5rem;flex-wrap:wrap;} 
+      .group-actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.85rem;} 
+      .alert{background:rgba(249,115,115,.12);border:1px solid rgba(249,115,115,.45);color:var(--admin-danger);padding:.9rem 1rem;border-radius:8px;margin-bottom:1.25rem;} 
+      table{width:100%;border-collapse:collapse;margin-top:.75rem;} 
+      table th,table td{padding:.6rem .75rem;border-bottom:1px solid var(--admin-border);text-align:left;font-size:.95rem;} 
+      table th{background:rgba(11,92,214,.18);font-weight:600;color:var(--admin-text);} 
+      table tr:nth-child(even){background:rgba(26,35,53,.45);} 
+      table tr:nth-child(odd){background:rgba(26,35,53,.25);} 
+      .empty{padding:.75rem;font-size:.95rem;color:var(--admin-muted);} 
+      .status-pill{display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .85rem;border-radius:999px;font-weight:600;font-size:.9rem;background:rgba(255,255,255,.08);color:var(--admin-text);} 
+      .status-pill.status-normal{background:rgba(12,124,89,.2);color:#8be6bf;} 
+      .status-pill.status-warning{background:rgba(255,184,76,.23);color:#ffb84c;} 
+      .status-pill.status-error{background:rgba(249,115,115,.25);color:var(--admin-danger);} 
+      .status-pill.subtle{background:rgba(255,255,255,.06);color:var(--admin-muted);} 
+      .status-strip{display:flex;flex-wrap:wrap;gap:.45rem;margin:.65rem 0;} 
+      .status-updated{font-size:.9rem;color:var(--admin-muted);} 
+      .status-message{margin-bottom:.65rem;font-size:.9rem;color:var(--admin-muted);} 
+      .status-message.error{color:var(--admin-danger);} 
+      .status-grid{flex:1 1 100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem;margin-top:.9rem;} 
+      .status-grid h3{margin:0 0 .35rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--admin-muted);} 
+      .status-list{list-style:none;margin:0;padding:0;} 
+      .status-list li{padding:.45rem .65rem;border:1px solid var(--admin-border);border-radius:6px;margin-bottom:.35rem;background:rgba(26,35,53,.55);font-size:.9rem;} 
+      .status-list li.muted{border-style:dashed;background:transparent;color:var(--admin-muted);} 
+      #manager-status-updated.error{color:var(--admin-danger);} 
+      @media (max-width:640px){
+        .group-actions{flex-direction:column;align-items:flex-start;}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <h1>Hello {{ display_name }}</h1>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+
+      {% if missing_email %}
+        <div class="alert">Add an email address to your staff account so Printing Services can reach you. Visit the admin profile page to update it.</div>
+      {% endif %}
+
+      <div class="status-controls">
+        <button type="button" class="button tertiary" id="manager-status-refresh">Refresh All Now</button>
+        <span class="muted" id="manager-status-updated">Preparing live status...</span>
+      </div>
+
+      {% if groups %}
+        {% for group in groups %}
+          <div class="card">
+            <div>
+              <h2>{{ group.name }}</h2>
+              {% if group.building %}
+                <p class="muted" style="margin-top:.15rem;">Building: {{ group.building }}</p>
+              {% endif %}
+            </div>
+            <div class="group-actions">
+              <a class="button" href="{% url 'manager_group_order' group.id %}">Order for entire group</a>
+              <a class="button secondary" href="{% url 'manager_group_quick_paper' group.id %}">Quick paper order</a>
+            </div>
+            <ul class="printer-list">
+              {% for printer in group.printers.all %}
+                {% with payload=printer.status_payload %}
+                  {% if payload %}
+                    {% with status=payload.status %}
+                      {% with attention=status.attention snmp_ok=status.snmp_ok %}
+                        <li data-printer-id="{{ printer.id }}"{% if attention or not snmp_ok %} class="{% if attention %}attention{% endif %}{% if attention and not snmp_ok %} {% endif %}{% if not snmp_ok %}snmp-error{% endif %}"{% endif %}>
+                          <div class="printer-info">
+                            <strong>{{ printer.campus_label }}</strong>
+                            <div class="muted">{{ printer.make }} {{ printer.model }} &mdash; {{ printer.location_in_building }}</div>
+                            <div class="status-strip">
+                              <span class="status-pill {% if not snmp_ok %}status-error{% elif attention %}status-warning{% else %}status-normal{% endif %}" data-role="status-pill">{{ status.status_label|default:'Unknown' }}</span>
+                              <span class="status-pill subtle" data-role="device-pill">{% if status.device_status_label %}{{ status.device_status_label }}{% else %}Device status unavailable{% endif %}</span>
+                              <span class="status-updated" data-role="updated">{% if status.display_timestamp %}Last checked: {{ status.display_timestamp }}{% else %}Last checked: awaiting data{% endif %}</span>
+                            </div>
+                            <div class="status-message{% if not snmp_ok %} error{% endif %}" data-role="message"{% if snmp_ok and not status.snmp_message %} hidden{% endif %}>
+                              {% if status.snmp_message %}
+                                {{ status.snmp_message }}
+                              {% elif not snmp_ok %}
+                                SNMP data unavailable for this printer.
+                              {% endif %}
+                            </div>
+                          </div>
+                          <div class="actions">
+                            <a class="button small" href="{% url 'manager_printer_order' printer.id %}">Order supplies</a>
+                            <a class="button small secondary" href="{% url 'manager_printer_issue' printer.id %}">Report issue</a>
+                            <button type="button" class="button small tertiary" data-action="refresh" data-printer-id="{{ printer.id }}">Refresh</button>
+                          </div>
+                          <div class="status-grid">
+                            <div>
+                              <h3>Alerts</h3>
+                              <ul class="status-list" data-role="alerts">
+                                {% if status.alerts %}
+                                  {% for alert in status.alerts %}
+                                    <li>{{ alert.severity|default:'Alert' }} &mdash; {{ alert.description|default:'Details unavailable' }}</li>
+                                  {% endfor %}
+                                {% else %}
+                                  <li class="muted">No active alerts reported.</li>
+                                {% endif %}
+                              </ul>
+                            </div>
+                            <div>
+                              <h3>Error Flags</h3>
+                              <ul class="status-list" data-role="errors">
+                                {% if status.error_flags %}
+                                  {% for flag in status.error_flags %}
+                                    <li>
+                                      {% if flag.label %}
+                                        {{ flag.label }}
+                                      {% elif flag.code %}
+                                        {{ flag.code }}
+                                      {% else %}
+                                        Unknown issue
+                                      {% endif %}
+                                    </li>
+                                  {% endfor %}
+                                {% else %}
+                                  <li class="muted">No error flags are active.</li>
+                                {% endif %}
+                              </ul>
+                            </div>
+                            <div>
+                              <h3>Supplies</h3>
+                              <ul class="status-list" data-role="supplies">
+                                {% if status.supplies %}
+                                  {% for supply in status.supplies %}
+                                    <li>
+                                      {{ supply.description|default:'Supply' }}
+                                      {% if supply.percent != None %}
+                                        &mdash; {{ supply.percent|floatformat:0 }}%
+                                      {% elif supply.level != None %}
+                                        &mdash; Level {{ supply.level }}
+                                      {% endif %}
+                                    </li>
+                                  {% endfor %}
+                                {% else %}
+                                  <li class="muted">No consumable readings returned.</li>
+                                {% endif %}
+                              </ul>
+                            </div>
+                          </div>
+                        </li>
+                      {% endwith %}
+                    {% endwith %}
+                  {% else %}
+                    <li data-printer-id="{{ printer.id }}">
+                      <div class="printer-info">
+                        <strong>{{ printer.campus_label }}</strong>
+                        <div class="muted">{{ printer.make }} {{ printer.model }} &mdash; {{ printer.location_in_building }}</div>
+                        <div class="status-message error" data-role="message">SNMP data unavailable for this printer.</div>
+                      </div>
+                      <div class="actions">
+                        <a class="button small" href="{% url 'manager_printer_order' printer.id %}">Order supplies</a>
+                        <a class="button small secondary" href="{% url 'manager_printer_issue' printer.id %}">Report issue</a>
+                        <button type="button" class="button small tertiary" data-action="refresh" data-printer-id="{{ printer.id }}">Refresh</button>
+                      </div>
+                    </li>
+                  {% endif %}
+                {% endwith %}
+              {% empty %}
+                <li class="empty">No printers are assigned to this group yet.</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="card">
+          <p class="muted">No printer groups are assigned to your account. Contact Printing Services if you believe this is an error.</p>
+        </div>
+      {% endif %}
+
+      <div class="card">
+        <h2>Recent issue reports</h2>
+        {% if recent_issues %}
+          <table>
+            <thead>
+              <tr>
+                <th>Submitted</th>
+                <th>Printer</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ticket in recent_issues %}
+                <tr>
+                  <td>{{ ticket.created_at|date:"M j, g:i a" }}</td>
+                  <td>{{ ticket.printer.campus_label }} &mdash; {{ ticket.printer.location_in_building }}</td>
+                  <td>{{ ticket.details|linebreaksbr }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty">No issues have been reported for your printers yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {{ printer_status_payloads|json_script:"manager-status-data" }}
+    <script>
+      (function(){
+        const dataEl = document.getElementById('manager-status-data');
+        if (!dataEl) {
+          return;
+        }
+        const endpoint = "{% url 'manager_status_feed' %}";
+        const pollIntervalSeconds = Number('{{ poll_interval_seconds|default:300 }}') || 300;
+        const globalButton = document.getElementById('manager-status-refresh');
+        const globalStatus = document.getElementById('manager-status-updated');
+        let payloads;
+        try {
+          payloads = JSON.parse(dataEl.textContent) || [];
+        } catch (error) {
+          payloads = [];
+        }
+        const state = new Map();
+
+        function intervalSummary(seconds) {
+          if (!seconds || seconds <= 0) {
+            return 'Auto refresh disabled.';
+          }
+          if (seconds < 60) {
+            return 'Auto refreshes every ' + seconds + ' seconds.';
+          }
+          const minutes = seconds / 60;
+          if (minutes < 2) {
+            return 'Auto refreshes every 1 minute.';
+          }
+          return 'Auto refreshes every ' + Math.round(minutes) + ' minutes.';
+        }
+
+        const refreshSummary = intervalSummary(pollIntervalSeconds);
+
+        function formatTimestamp(value) {
+          if (!value) {
+            return 'Last checked: just now';
+          }
+          const date = new Date(value);
+          if (Number.isNaN(date.getTime())) {
+            return 'Last checked: unknown';
+          }
+          return 'Last checked: ' + date.toLocaleString();
+        }
+
+        function renderList(target, items, renderItem, emptyMessage) {
+          if (!target) {
+            return;
+          }
+          target.innerHTML = '';
+          if (!items || !items.length) {
+            const li = document.createElement('li');
+            li.className = 'muted';
+            li.textContent = emptyMessage;
+            target.appendChild(li);
+            return;
+          }
+          items.forEach((item) => {
+            const li = document.createElement('li');
+            li.textContent = renderItem(item);
+            target.appendChild(li);
+          });
+        }
+
+        function renderPayload(payload) {
+          if (!payload || !payload.status) {
+            return;
+          }
+          state.set(payload.printer.id, payload);
+          const row = document.querySelector('[data-printer-id="' + payload.printer.id + '"]');
+          if (!row) {
+            return;
+          }
+          const status = payload.status;
+          row.classList.toggle('attention', !!status.attention);
+          row.classList.toggle('snmp-error', !status.snmp_ok);
+
+          const pill = row.querySelector('[data-role="status-pill"]');
+          if (pill) {
+            let level = 'status-pill status-normal';
+            if (!status.snmp_ok) {
+              level = 'status-pill status-error';
+            } else if (status.attention) {
+              level = 'status-pill status-warning';
+            }
+            pill.className = level;
+            pill.textContent = status.status_label || 'Unknown';
+          }
+
+          const devicePill = row.querySelector('[data-role="device-pill"]');
+          if (devicePill) {
+            let level = 'status-pill subtle';
+            if (!status.snmp_ok) {
+              level = 'status-pill status-error';
+            } else if (status.attention) {
+              level = 'status-pill status-warning';
+            }
+            devicePill.className = level;
+            devicePill.textContent = status.device_status_label || 'Device status unavailable';
+          }
+
+          const updated = row.querySelector('[data-role="updated"]');
+          if (updated) {
+            updated.textContent = formatTimestamp(status.fetched_at || status.updated_at);
+          }
+
+          const message = row.querySelector('[data-role="message"]');
+          if (message) {
+            if (status.snmp_message) {
+              message.hidden = false;
+              message.classList.toggle('error', !status.snmp_ok || status.attention);
+              message.textContent = status.snmp_message;
+            } else if (!status.snmp_ok) {
+              message.hidden = false;
+              message.classList.add('error');
+              message.textContent = 'SNMP data unavailable for this printer.';
+            } else {
+              message.hidden = true;
+              message.classList.remove('error');
+              message.textContent = '';
+            }
+          }
+
+          const alerts = row.querySelector('[data-role="alerts"]');
+          renderList(alerts, status.alerts, (alert) => {
+            const severity = alert.severity || 'Alert';
+            return severity + ' - ' + (alert.description || 'Details unavailable');
+          }, 'No active alerts reported.');
+
+          const errors = row.querySelector('[data-role="errors"]');
+          renderList(errors, status.error_flags, (flag) => {
+            if (flag.label) {
+              return flag.label;
+            }
+            if (flag.code) {
+              return flag.code;
+            }
+            return 'Unknown issue';
+          }, 'No error flags are active.');
+
+          const supplies = row.querySelector('[data-role="supplies"]');
+          renderList(supplies, status.supplies, (supply) => {
+            const parts = [];
+            parts.push(supply.description || 'Supply');
+            if (typeof supply.percent === 'number' && !Number.isNaN(supply.percent)) {
+              parts.push(Math.round(Math.max(0, supply.percent)) + '%');
+            } else if (supply.level !== undefined && supply.level !== null) {
+              parts.push('Level ' + supply.level);
+            }
+            return parts.join(' - ');
+          }, 'No consumable readings returned.');
+        }
+
+        function setGlobalStatus(text, isError) {
+          if (!globalStatus) {
+            return;
+          }
+          globalStatus.textContent = text;
+          globalStatus.classList.toggle('error', !!isError);
+        }
+
+        payloads.forEach(renderPayload);
+        setGlobalStatus(refreshSummary, false);
+
+        let refreshingAll = false;
+        const refreshingPerPrinter = new Map();
+
+        async function refreshAll(force) {
+          if (refreshingAll) {
+            return;
+          }
+          refreshingAll = true;
+          if (globalButton) {
+            globalButton.disabled = true;
+            globalButton.classList.add('loading');
+          }
+          try {
+            let url = endpoint;
+            if (force) {
+              url += (url.indexOf('?') > -1 ? '&' : '?') + 'force=1';
+            }
+            // Cache-buster to avoid any intermediary caching
+            url += (url.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
+            const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!response.ok) {
+              throw new Error('HTTP ' + response.status);
+            }
+            const data = await response.json();
+            if (data && Array.isArray(data.printers)) {
+              data.printers.forEach(renderPayload);
+              setGlobalStatus('Last sync: ' + new Date().toLocaleString() + ' - ' + refreshSummary, false);
+            }
+          } catch (error) {
+            setGlobalStatus('Refresh failed: ' + error.message + ' - ' + refreshSummary, true);
+          } finally {
+            if (globalButton) {
+              globalButton.disabled = false;
+              globalButton.classList.remove('loading');
+            }
+            refreshingAll = false;
+          }
+        }
+
+        async function refreshOne(printerId, force) {
+          if (!printerId || refreshingPerPrinter.get(printerId)) {
+            return;
+          }
+          refreshingPerPrinter.set(printerId, true);
+          const button = document.querySelector('button[data-action="refresh"][data-printer-id="' + printerId + '"]');
+          if (button) {
+            button.disabled = true;
+            button.classList.add('loading');
+          }
+          try {
+            let url = endpoint + '?printer=' + encodeURIComponent(printerId);
+            if (force) {
+              url += '&force=1';
+            }
+            // Cache-buster per request
+            url += '&t=' + Date.now();
+            const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!response.ok) {
+              throw new Error('HTTP ' + response.status);
+            }
+            const data = await response.json();
+            if (data && Array.isArray(data.printers) && data.printers.length) {
+              data.printers.forEach(renderPayload);
+              setGlobalStatus('Last sync: ' + new Date().toLocaleString() + ' - ' + refreshSummary, false);
+            }
+          } catch (error) {
+            const message = document.querySelector('[data-printer-id="' + printerId + '"] [data-role="message"]');
+            if (message) {
+              message.hidden = false;
+              message.classList.add('error');
+              message.textContent = 'Unable to refresh device status: ' + error.message;
+            }
+            setGlobalStatus('Refresh failed: ' + error.message + ' - ' + refreshSummary, true);
+          } finally {
+            if (button) {
+              button.disabled = false;
+              button.classList.remove('loading');
+            }
+            refreshingPerPrinter.delete(printerId);
+          }
+        }
+
+        if (globalButton) {
+          globalButton.addEventListener('click', () => refreshAll(true));
+        }
+
+        document.querySelectorAll('button[data-action="refresh"]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const printerId = btn.getAttribute('data-printer-id');
+            refreshOne(printerId, true);
+          });
+        });
+
+        if (pollIntervalSeconds > 0) {
+          setInterval(() => {
+            refreshAll(false);
+          }, pollIntervalSeconds * 1000);
+        }
+      })();
+    </script>
+  </body>
+</html>

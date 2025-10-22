@@ -1,0 +1,63 @@
+{% extends "admin/index.html" %}
+{% load static %}
+
+{% block content %}
+  <div class="dashboard-module">
+    <h2>Printer Device Alerts</h2>
+    <ul>
+      {% if printer_status_alerts %}
+        {% for status in printer_status_alerts %}
+          <li>
+            <strong>{{ status.printer.campus_label }}</strong>
+            - {{ status.status_label|default:"Unknown" }}{% if status.device_status_label %} ({{ status.device_status_label }}){% endif %}
+            {% if not status.snmp_ok %}
+              <span style="color:#f97373;"> - SNMP offline: {{ status.snmp_message|default:"Connection failed" }}</span>
+            {% elif status.attention %}
+              <span style="color:#ffb84c;"> - Attention required</span>
+            {% endif %}
+            {% if status.alerts %}
+              <ul>
+                {% for alert in status.alerts %}
+                  <li>{{ alert.severity|default:"Alert" }} - {{ alert.description|default:"Details unavailable" }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+            {% if status.error_flags %}
+              <ul>
+                {% for flag in status.error_flags %}
+                  <li>{% if flag.label %}{{ flag.label }}{% elif flag.code %}{{ flag.code }}{% else %}Unknown issue{% endif %}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+            <div class="muted">Last checked: {% if status.fetched_at %}{{ status.fetched_at|date:"M j, g:i a" }}{% else %}Unknown{% endif %}</div>
+          </li>
+        {% endfor %}
+      {% else %}
+        <li>No printers are reporting SNMP issues.</li>
+      {% endif %}
+    </ul>
+    {% if printer_status_alert_overflow %}
+      <p class="muted">+ {{ printer_status_alert_overflow }} more devices match this filter.</p>
+    {% endif %}
+    {% if printer_status_summary %}
+      <p class="muted">Totals - Attention: {{ printer_status_summary.attention_total }}, Offline: {{ printer_status_summary.snmp_fault_total }}</p>
+    {% endif %}
+  </div>
+
+  <div class="dashboard-module">
+    <h2>Inventory Alerts</h2>
+    <ul>
+      {% for item in low_inventory_items %}
+        <li>
+          <strong>{{ item.name }}</strong> ({{ item.category }})
+          {% if item.model_number %} - Model: {{ item.model_number }}{% endif %}
+          <span style="color: red;"> Low stock: {{ item.quantity_on_hand }} (Reorder threshold: {{ item.reorder_threshold }})</span>
+        </li>
+      {% empty %}
+        <li>No low-inventory notifications.</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  {{ block.super }}
+{% endblock %}

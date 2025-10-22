@@ -1,0 +1,12 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{# Load our CSS in both blocks to ensure it wins #}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'tickets/admin.css' %}">{% endblock %}
+{% block extrahead %}{{ block.super }}<link rel="stylesheet" href="{% static 'tickets/admin.css' %}">{% endblock %}
+
+{% block branding %}
+	<h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></h1>
+{% endblock %}
+
+{% block title %}Berea College Admin Portal{% endblock %}

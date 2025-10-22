@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{% if group_mode %}Order Supplies - {{ group.name }}{% else %}Order Supplies - {{ printer.campus_label }}{% endif %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root{
+        --admin-bg:#080b12;
+        --admin-card:#121722;
+        --admin-border:#1d2433;
+        --admin-text:#e6ecff;
+        --admin-muted:#9aa3b8;
+        --admin-primary:#0b5cd6;
+        --admin-secondary:#0c7c59;
+        --admin-danger:#f97373;
+        --admin-pill:#1a2335;
+      }
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--admin-bg);color:var(--admin-text);margin:0;padding:2rem 1rem;}
+      .layout{max-width:820px;margin:0 auto;}
+      .card{background:var(--admin-card);border:1px solid var(--admin-border);border-radius:10px;padding:1.5rem;margin-bottom:1.25rem;box-shadow:0 6px 14px rgba(8,11,18,.35);}
+      h1{margin:0 0 .75rem;font-size:1.7rem;font-weight:600;}
+      .muted{color:var(--admin-muted);}
+      label{display:block;font-weight:600;margin-top:1rem;}
+      input,textarea{width:100%;padding:.65rem;border:1px solid #273246;border-radius:6px;font-size:1rem;background:#0f141f;color:var(--admin-text);}      
+      textarea{min-height:110px;}
+      input:focus,textarea:focus{outline:2px solid rgba(11,92,214,.45);border-color:rgba(11,92,214,.65);}
+      .button{display:inline-flex;align-items:center;justify-content:center;padding:.75rem 1.4rem;border-radius:6px;text-decoration:none;background:var(--admin-primary);color:#fff;font-weight:600;font-size:1rem;cursor:pointer;border:0;transition:filter .15s ease;}
+      .button.secondary{background:var(--admin-secondary);}
+      .button.compact{padding:.55rem 1.1rem;}
+      .button:hover{filter:brightness(1.05);}
+      .field-error{color:var(--admin-danger);font-size:.9rem;margin-top:.35rem;}
+      .alert{background:rgba(249,115,115,.12);border:1px solid rgba(249,115,115,.45);color:var(--admin-danger);padding:.9rem 1rem;border-radius:8px;margin-bottom:1.1rem;}
+      .item-card{border:1px solid var(--admin-border);border-radius:8px;padding:1rem;margin-top:1rem;background:var(--admin-pill);}
+      .item-card h3{margin:0 0 .65rem;font-size:1.05rem;color:var(--admin-text);}
+      .item-grid{display:flex;gap:1rem;flex-wrap:wrap;}
+      .item-grid>div{flex:1 1 240px;}
+      .actions{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1rem;}
+      .helper{font-size:.9rem;color:var(--admin-muted);margin-top:.35rem;}
+      .printer-list{color:var(--admin-muted);margin:.25rem 0 0 1.2rem;padding:0;}
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <div class="card">
+        {% if group_mode %}
+          <h1>Order supplies for {{ group.name }}</h1>
+          <p class="muted">Requests will notify Printing Services about every printer in this group.</p>
+        {% else %}
+          <h1>Order supplies</h1>
+        {% endif %}
+        <p class="muted">
+          {{ printer.campus_label }} &mdash; {{ printer.make }} {{ printer.model }}<br>
+          {{ printer.building }} / {{ printer.location_in_building }}
+        </p>
+        {% if group_printers %}
+          <p class="muted" style="margin-top:.5rem;">Group printers:</p>
+          <ul class="printer-list">
+            {% for gp in group_printers %}
+              <li>{{ gp.campus_label }} &mdash; {{ gp.location_in_building }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <form method="post">
+          {% csrf_token %}
+          {{ form.requester_name }}
+          {{ form.requester_email }}
+          {% if form.errors or items_formset.non_form_errors %}
+            <div class="alert">Please fix the highlighted items below.</div>
+          {% endif %}
+
+          {{ items_formset.management_form }}
+          <div id="items-container">
+            {% for item_form in items_formset %}
+              <div class="item-card" data-index="{{ forloop.counter0 }}">
+                <h3>Item {{ forloop.counter }}</h3>
+                <div class="item-grid">
+                  <div>
+                    <label for="{{ item_form.supply_type.id_for_label }}">Supply type</label>
+                    {{ item_form.supply_type }}
+                    {% if item_form.supply_type.errors %}
+                      <div class="field-error">{{ item_form.supply_type.errors|join:', ' }}</div>
+                    {% endif %}
+                  </div>
+                  <div>
+                    <label for="{{ item_form.supply_quantity.id_for_label }}">Quantity</label>
+                    {{ item_form.supply_quantity }}
+                    {% if item_form.supply_quantity.errors %}
+                      <div class="field-error">{{ item_form.supply_quantity.errors|join:', ' }}</div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if allow_item_add %}
+            <button class="button secondary compact" type="button" id="add-item">Add another item</button>
+          {% endif %}
+
+          {{ form.details.label_tag }}
+          {{ form.details }}
+          {% if form.details.errors %}
+            <div class="field-error">{{ form.details.errors|join:', ' }}</div>
+          {% endif %}
+
+          {% if form.has_group and not form.apply_to_group.is_hidden %}
+            <label style="display:flex;align-items:center;gap:.5rem;margin-top:1rem;font-weight:500;">
+              {{ form.apply_to_group }}
+              {{ form.apply_to_group.label }}
+            </label>
+            <div class="helper">Group-wide requests notify Printing Services about every printer listed above.</div>
+            {% if form.apply_to_group.errors %}
+              <div class="field-error">{{ form.apply_to_group.errors|join:', ' }}</div>
+            {% endif %}
+          {% endif %}
+
+          <div class="actions">
+            <button class="button" type="submit">Submit order</button>
+            <a class="button secondary" href="{% url 'manager_dashboard' %}">Back to manager dashboard</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script type="text/template" id="empty-item-template">
+      <div class="item-card" data-index="__prefix__">
+        <h3>Item __number__</h3>
+        <div class="item-grid">
+          <div>
+            <label>Supply type</label>
+            <input type="text" name="items-__prefix__-supply_type" id="id_items-__prefix__-supply_type">
+          </div>
+          <div>
+            <label>Quantity</label>
+            <input type="number" name="items-__prefix__-supply_quantity" id="id_items-__prefix__-supply_quantity" min="1" value="1">
+          </div>
+        </div>
+      </div>
+    </script>
+
+    <script>
+      (function(){
+        const addBtn = document.getElementById('add-item');
+        if (!addBtn) {
+          return;
+        }
+        const container = document.getElementById('items-container');
+        const totalForms = document.getElementById('id_items-TOTAL_FORMS');
+        const template = document.getElementById('empty-item-template').innerHTML.trim();
+
+        addBtn.addEventListener('click', function(evt){
+          evt.preventDefault();
+          const formCount = parseInt(totalForms.value, 10);
+          const html = template
+            .replace(/__prefix__/g, formCount)
+            .replace(/__number__/g, formCount + 1);
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = html;
+          container.appendChild(wrapper.firstElementChild);
+          totalForms.value = formCount + 1;
+        });
+      })();
+    </script>
+  </body>
+</html>
