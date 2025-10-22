@@ -1,8 +1,10 @@
 {% extends "admin/change_form.html" %}
 {% load static %}
 
-{% block content %}
-  <div style="margin-bottom:1.25rem;padding:1rem;border:1px solid #ddd;border-radius:8px;background:#f9fafb;">
+{% block field_sets %}
+  {{ block.super }}
+
+  <div id="admin-status-wrapper" style="margin-top:1.0rem;padding:1rem;border:1px solid #ddd;border-radius:8px;background:#f9fafb;">
     <h2 style="margin:0 0 .5rem;">Live Device Status</h2>
     <p style="margin:0 0 .75rem;color:#555;" id="admin-status-updated">Preparing live status...</p>
     <div id="admin-status-panel">
@@ -18,11 +20,11 @@
     {% endif %}
   </div>
 
-  {{ block.super }}
-
   {% if printer_status_endpoint %}
   <script>
     (function(){
+      // Panel is injected after fieldsets via 'field_sets'.
+
       const dataEl = document.getElementById('printer-status-data');
       const renderTarget = document.getElementById('admin-status-render');
       const updated = document.getElementById('admin-status-updated');
@@ -108,5 +110,4 @@
     })();
   </script>
   {% endif %}
-
 {% endblock %}
