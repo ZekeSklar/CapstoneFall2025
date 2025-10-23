@@ -4,7 +4,7 @@
 
 {% block content %}
   <div id="content-main">
-    {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+    {# Removed duplicate app list include to avoid repeating the sidebar content on Django 5.x #}
 
     <div class="dashboard-module" style="margin-top:1rem;">
       <h2>Printer Device Alerts</h2>
