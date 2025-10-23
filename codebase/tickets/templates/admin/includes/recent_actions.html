@@ -1,0 +1,21 @@
+{% load i18n %}
+{# Compatibility include for Django >=5 where the default partial was removed. #}
+<div class="module-content">
+  <ul class="actionlist">
+    {% for entry in admin_log %}
+      <li class="{% if entry.is_addition %}addlink{% elif entry.is_change %}changelink{% elif entry.is_deletion %}deletelink{% endif %}">
+        {% if entry.get_admin_url and not entry.is_deletion %}
+          <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
+        {% else %}
+          {{ entry.object_repr }}
+        {% endif %}
+        <br>
+        <span class="mini quiet">{{ entry.action_time|date:"DATETIME_FORMAT" }}</span>
+      </li>
+    {% empty %}
+      <li class="quiet">{% trans "No recent actions." %}</li>
+    {% endfor %}
+  </ul>
+  {# Note: 'admin_log' is set by `{% get_admin_log 10 as admin_log %}` in the parent template. #}
+</div>
+
