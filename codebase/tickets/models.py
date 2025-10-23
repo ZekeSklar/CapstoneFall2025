@@ -32,11 +32,12 @@ class InventoryItem(models.Model):
     # Optional physical shelf location
     # Rows are letters (e.g., A, B, ... or AA), columns are numbers (e.g., 1, 2, 10)
     shelf_row = models.CharField(
-        max_length=3,
+        max_length=1,
         blank=True,
         null=True,
         db_index=True,
-        help_text="Shelf row letters (e.g., A, B, AA)."
+        validators=[RegexValidator(r'^[A-Za-z]$', message='Shelf row must be a single letter (A-Z).')],
+        help_text="Shelf row letter (A-Z)."
     )
     shelf_column = models.PositiveSmallIntegerField(
         blank=True,
@@ -90,7 +91,7 @@ class InventoryItem(models.Model):
         # Normalize shelf_row to uppercase letters (if provided)
         super().clean()
         if self.shelf_row:
-            self.shelf_row = ''.join(ch for ch in self.shelf_row.strip().upper() if ch.isalpha())[:3]
+            self.shelf_row = ''.join(ch for ch in self.shelf_row.strip().upper() if ch.isalpha())[:1]
 
 
 class PrinterGroup(models.Model):
