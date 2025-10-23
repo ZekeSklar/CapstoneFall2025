@@ -4,11 +4,14 @@ from typing import Tuple, Optional
 
 
 import os
+from pathlib import Path
 
-BASE_DIR = os.path.dirname(__file__)
-INPUT = os.path.join(BASE_DIR, "printer_inventory_condensed_for_import_FINAL.csv")
-OUTPUT = os.path.join(BASE_DIR, "printer_inventory_condensed_for_import_FIXED.csv")
-REPORT = os.path.join(BASE_DIR, "printer_inventory_ip_report.txt")
+# Use repo root's data/ directory for IO
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = ROOT_DIR / "data"
+INPUT = str(DATA_DIR / "printer_inventory_condensed_for_import_FINAL.csv")
+OUTPUT = str(DATA_DIR / "printer_inventory_condensed_for_import_FIXED.csv")
+REPORT = str(DATA_DIR / "printer_inventory_ip_report.txt")
 
 
 def is_valid_ipv4(ip: str) -> bool:

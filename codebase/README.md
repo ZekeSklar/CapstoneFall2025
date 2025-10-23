@@ -1,5 +1,14 @@
 # Printer system
 
+## Repository layout
+
+- `printer_system/` – Django project (settings, urls, wsgi/asgi)
+- `tickets/` – Main Django app (models, views, templates, static)
+- `data/` – Local data artifacts (SQLite DB and CSVs)
+  - SQLite path: `data/db.sqlite3`
+- `scripts/` – Utility scripts for CSV cleanup and SNMP debugging
+  - Run from repo root, e.g.: `python scripts/clean_printer_csv.py`
+
 ## Daily issue summary emails
 
 The application automatically sends one summary per 24-hour window the next time any web request is processed. Ensure the site receives at least one request a day or run the manual command below.

@@ -1,9 +1,11 @@
 import csv
 import re
+from pathlib import Path
 
-# Input and output file paths
-INPUT = 'printer_inventory_condensed_for_import_FINAL2.csv'
-OUTPUT = 'printer_inventory_condensed_for_import_FINAL.csv'
+# Input and output file paths (under repo-level data/)
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+INPUT = str(DATA_DIR / 'printer_inventory_condensed_for_import_FINAL2.csv')
+OUTPUT = str(DATA_DIR / 'printer_inventory_condensed_for_import_FINAL.csv')
 
 def normalize_mac(mac):
     if not mac or mac.strip().lower() in [

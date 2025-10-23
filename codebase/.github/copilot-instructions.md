@@ -32,7 +32,7 @@ Keep the guidance below focused on patterns discoverable in the codebase so you 
   - If `pysnmp` missing, `SnmpNotConfigured` will be raised.
 
 ### Integration and environment notes
-- Default DB: SQLite at `db.sqlite3` (see `printer_system/settings.py`). Migrations exist in `tickets/migrations/`.
+- Default DB: SQLite at `data/db.sqlite3` (see `printer_system/settings.py`). Migrations exist in `tickets/migrations/`.
 - SNMP config via settings/env: `SNMP_COMMUNITY`, `SNMP_TIMEOUT`, `SNMP_RETRIES`, `SNMP_POLL_INTERVAL_SECONDS`.
 - Issue summary recipients resolved by `tickets/summary._resolve_recipients()` — it checks explicit argument, flagged users, `ISSUE_SUMMARY_RECIPIENT`, `EMAIL_TO`, then falls back to `sklarz@berea.edu`.
 
