@@ -1,23 +1,61 @@
+### Python / Django ###
 # Byte-compiled / cache
 __pycache__/
 *.py[cod]
+*$py.class
 
-# Virtualenv
+# Packaging / build artifacts
+.Python
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+.cache/
+
+# Virtualenvs
 .venv/
+venv/
+env/
 
-# Environment
+# Environment files
 .env
+.env.*
+.env.local
 
-# Django build outputs
+# Django collected/static & user uploads
 staticfiles/
 media/
 
-# Local data artifacts
+# Local data artifacts (DB, exports, reports)
+data/*.sqlite3
 data/db.sqlite3
 data/*.csv
 data/*.txt
+data/*.json
+data/*.bak
+data/*.log
 
+# Tests / coverage
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+
+### Editors / OS ###
 # IDE/editor
 .vscode/
 .idea/
+*.code-workspace
+
+# OS-generated
+.DS_Store
+Thumbs.db
+
+### Optional (uncomment if present) ###
+# Node
+# node_modules/
 
