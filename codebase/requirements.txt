@@ -1,0 +1,14 @@
+Django==5.2.5
+python-dotenv>=1.0.1
+django-import-export>=4.0
+tablib[xlsx]>=3.5
+
+# SNMP support used by tickets/snmp_client.py
+pysnmp>=4.4,<7
+
+# App servers
+waitress>=3.0    # Windows-friendly production server
+
+# Optional: serve static files directly from app (see README for setup)
+whitenoise>=6.7
+
