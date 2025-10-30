@@ -65,12 +65,13 @@ This project runs as a Django site. On Windows, the simplest production setup is
 
 - Optional: Run as a Windows Service (NSSM)
   - Install NSSM: https://nssm.cc/download
-  - `nssm install printer-system`
-    - Application: `C:\path\to\repo\.venv\Scripts\waitress-serve.exe`
-    - Arguments: `--listen=0.0.0.0:8000 printer_system.wsgi:application`
-    - Startup directory: `C:\path\to\repo`
-    - Environment (optional): `DJANGO_SETTINGS_MODULE=printer_system.settings`, `PYTHONUNBUFFERED=1`
-  - Start: `nssm start printer-system`
+  - Use helper scripts in `scripts/` (run in an elevated PowerShell):
+    - Install/start:
+      - `powershell -ExecutionPolicy Bypass -File scripts\install_service.ps1 -ServiceName printer-system -Port 8000`
+      - Optional: `-RepoPath C:\path\to\repo` and `-NssmPath C:\Path\To\nssm.exe`
+    - Remove/stop:
+      - `powershell -ExecutionPolicy Bypass -File scripts\remove_service.ps1 -ServiceName printer-system`
+  - The service runs Waitress from your venv and logs to `data\service-stdout.log` and `data\service-stderr.log`.
 
 - Backups
   - SQLite: stop the service (or quiesce writes) and copy `data/db.sqlite3`.
