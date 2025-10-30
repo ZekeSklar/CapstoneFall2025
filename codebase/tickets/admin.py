@@ -13,6 +13,7 @@ from django.utils.html import format_html
 import json
 import csv
 from .printer_status import POLL_INTERVAL_SECONDS, ensure_latest_status, build_status_payload
+from .forms import InventoryItemAdminForm
 from .models import (
     InventoryItem,
     IssueSummaryRecipient,
@@ -127,6 +128,7 @@ admin.site.__class__ = CustomAdminSite
 # ---------- InventoryItem Admin ----------
 @admin.register(InventoryItem)
 class InventoryItemAdmin(admin.ModelAdmin):
+    form = InventoryItemAdminForm
     list_display = (
         'name', 'category', 'quantity_on_hand', 'reorder_threshold', 'shelf_location',
     )
@@ -137,6 +139,9 @@ class InventoryItemAdmin(admin.ModelAdmin):
     def shelf_location(self, obj):
         return obj.shelf_code or '-'
     shelf_location.short_description = 'Shelf'
+
+    class Media:
+        js = ('tickets/js/inventory_item_admin.js',)
 
 
 @admin.register(PrinterGroup)

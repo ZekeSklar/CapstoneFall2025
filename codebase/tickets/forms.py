@@ -1,7 +1,8 @@
 from django import forms
 from django.forms import formset_factory
 
-from .models import RequestTicket
+from .models import RequestTicket, InventoryItem
+from django.core.validators import RegexValidator
 
 
 class SupplyRequestForm(forms.ModelForm):
@@ -104,3 +105,31 @@ class IssueReportForm(forms.ModelForm):
     class Meta:
         model = RequestTicket
         fields = ['requester_name', 'requester_email', 'details']
+
+
+class InventoryItemAdminForm(forms.ModelForm):
+    shelf_row = forms.CharField(
+        required=False,
+        max_length=1,
+        label="Shelf row",
+        validators=[RegexValidator(r'^[A-Za-z]$', 'Shelf row must be a single letter (A-Z).')],
+        widget=forms.TextInput(
+            attrs={
+                'maxlength': '1',
+                'pattern': '[A-Za-z]',
+                'title': 'Single letter A–Z',
+                'style': 'text-transform:uppercase;width:4.5em',
+                'autocomplete': 'off',
+                'inputmode': 'text',
+            }
+        ),
+    )
+
+    class Meta:
+        model = InventoryItem
+        fields = '__all__'
+
+    def clean_shelf_row(self):
+        v = self.cleaned_data.get('shelf_row') or ''
+        v = ''.join(ch for ch in v.strip().upper() if ch.isalpha())[:1]
+        return v or None
