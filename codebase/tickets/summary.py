@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import send_mail
+import threading
 from django.db import transaction
 from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
@@ -141,6 +142,19 @@ def send_issue_summary(*, recipient: str | Iterable[str] | None = None, include_
 
 
 
+def _send_mail_async(subject: str, body: str, recipients: list[str]) -> None:
+    """Send email on a background thread to avoid blocking the request."""
+    def _run():
+        try:
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, recipients)
+        except Exception:
+            # Intentionally swallow to avoid bubbling into request path
+            pass
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+
 def maybe_send_daily_issue_summary():
     recipients = _resolve_recipients()
     if not recipients:
@@ -160,8 +174,9 @@ def maybe_send_daily_issue_summary():
             state.last_sent_at = now
             state.save(update_fields=["last_sent_at"])
 
+            # Defer email send to a background thread after the transaction commits
             transaction.on_commit(
-                lambda subj=subject, msg=body, rcpts=recipients: send_mail(subj, msg, settings.DEFAULT_FROM_EMAIL, rcpts)
+                lambda subj=subject, msg=body, rcpts=recipients: _send_mail_async(subj, msg, rcpts)
             )
     except (ProgrammingError, OperationalError):
         return False
