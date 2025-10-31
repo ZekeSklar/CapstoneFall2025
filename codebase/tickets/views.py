@@ -23,7 +23,12 @@ from django.utils import timezone
 from .models import Printer, PrinterGroup, RequestTicket
 
 from .forms import SupplyRequestForm, IssueReportForm, SupplyItemFormSet
-from .printer_status import POLL_INTERVAL_SECONDS, ensure_latest_status, build_status_payload
+from .printer_status import (
+    POLL_INTERVAL_SECONDS,
+    ensure_latest_status,
+    build_status_payload,
+    attach_status_to_printers,
+)
 
 
 
@@ -475,10 +480,21 @@ def printer_issue(request, qr_token):
 
 
 @login_required
-
 def manager_dashboard(request):
+    """
+    Manager landing page.
 
+    Avoid synchronous SNMP fetches on initial render so the page loads fast.
+    Use cached PrinterStatus payloads and let the frontend refresh via
+    manager_status_feed (AJAX).
+    """
     groups = list(_managed_groups_queryset(request.user))
+
+    # Collect all printers, attach cached statuses in one query
+    all_printers = []
+    for g in groups:
+        all_printers.extend(list(g.printers.all()))
+    attach_status_to_printers(all_printers)
 
     status_payloads: list[dict] = []
     attention_labels: list[str] = []
@@ -486,7 +502,7 @@ def manager_dashboard(request):
 
     for group in groups:
         for printer in group.printers.all():
-            status = ensure_latest_status(printer)
+            status = getattr(printer, 'status_cached', None)
             payload = build_status_payload(printer, status)
             status_payloads.append(payload)
             printer.status_payload = payload
