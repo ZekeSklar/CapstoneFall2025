@@ -202,13 +202,18 @@ class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
     readonly_fields = ("_live_device_status",)
 
     def get_fieldsets(self, request, obj=None):
-        fieldsets = super().get_fieldsets(request, obj)
+        # Ensure a list so we can append regardless of Django's return type
+        fieldsets = list(super().get_fieldsets(request, obj) or [])
         # Append our status panel after main field groups, before inlines
-        extra = ("Live Device Status", {
-            "fields": ("_live_device_status",),
-            "classes": ("wide",),
-        })
-        return fieldsets + (extra,)
+        extra = (
+            "Live Device Status",
+            {
+                "fields": ("_live_device_status",),
+                "classes": ("wide",),
+            },
+        )
+        fieldsets.append(extra)
+        return fieldsets
 
     def _live_device_status(self, obj):
         if not obj:
