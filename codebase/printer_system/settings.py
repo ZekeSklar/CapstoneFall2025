@@ -15,6 +15,13 @@ from datetime import timedelta
 import os
 from dotenv import load_dotenv
 
+# Optional dependencies flags
+try:
+    import whitenoise  # type: ignore
+    HAVE_WHITENOISE = True
+except Exception:
+    HAVE_WHITENOISE = False
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load .env in development
@@ -53,8 +60,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    # Serve static files directly in production when using Whitenoise
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Whitenoise (if installed) will be inserted just after SecurityMiddleware below.
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -63,6 +69,10 @@ MIDDLEWARE = [
     'tickets.middleware.IssueSummaryMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Insert Whitenoise middleware if available
+if HAVE_WHITENOISE:
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'printer_system.urls'
 
@@ -137,8 +147,9 @@ STATIC_URL = '/static/'
 # Collect static files here for production deployments
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Use compressed, hashed files when collected (recommended with Whitenoise)
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Use compressed, hashed files when collected (only if Whitenoise is installed)
+if HAVE_WHITENOISE:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
