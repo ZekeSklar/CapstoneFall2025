@@ -146,8 +146,10 @@ class InventoryItemAdmin(admin.ModelAdmin):
 
 @admin.register(PrinterGroup)
 class PrinterGroupAdmin(admin.ModelAdmin):
-    list_display = ('name', 'building', 'member_count')
-    search_fields = ('name', 'building')
+    # Hide the singular Building field from forms; managers may cover many buildings
+    fields = ('name', 'description', 'group_order_allowed_emails', 'managers')
+    list_display = ('name', 'member_count')
+    search_fields = ('name',)
     filter_horizontal = ('managers',)
 
     def member_count(self, obj):

@@ -302,9 +302,7 @@ def printer_order(request, qr_token):
                 extra.append(f"Item {idx}: {item['supply_type']} (qty {item['supply_quantity']})")
 
             if ticket.applies_to_group and ticket.group:
-
-                group_name = ticket.group.name or ticket.group.building or 'group'
-
+                group_name = ticket.group.name or 'group'
                 extra.append(f"Scope: Applies to entire group ({group_name})")
 
 
@@ -786,7 +784,7 @@ def _handle_group_order_request(request, group: PrinterGroup, items_initial=None
 
                 extra.append(f"Item {idx}: {item['supply_type']} (qty {item['supply_quantity']})")
 
-            group_name = group.name or group.building or 'group'
+            group_name = group.name or 'group'
 
             extra.append(f"Scope: Applies to entire group ({group_name})")
 
