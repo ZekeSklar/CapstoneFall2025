@@ -66,6 +66,9 @@ This project runs as a Django site. On Windows, the simplest production setup is
 - Optional: Run as a Windows Service (NSSM)
   - Install NSSM: https://nssm.cc/download
   - Use helper scripts in `scripts/` (run in an elevated PowerShell):
+    - One-shot bootstrap (venv, deps, migrate, collectstatic, service install, firewall):
+      - `powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -ServiceName printer-system -Port 8000`
+      - Optional: `-RepoPath C:\path\to\repo` and `-NssmPath C:\Path\To\nssm.exe`
     - Install/start:
       - `powershell -ExecutionPolicy Bypass -File scripts\install_service.ps1 -ServiceName printer-system -Port 8000`
       - Optional: `-RepoPath C:\path\to\repo` and `-NssmPath C:\Path\To\nssm.exe`
