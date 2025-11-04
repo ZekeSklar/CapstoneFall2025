@@ -59,9 +59,16 @@
         const pill = document.getElementById('mode-pill');
         const label = document.getElementById('mode-label');
         const tableBody = document.querySelector('#results tbody');
-        let mode = ({{ mode|default:'"out"'|safe }}) || 'out';
-        function setMode(m){ mode = (m==='in'?'in':'out'); pill.textContent = mode; label.textContent = mode; }
-        toggle.addEventListener('click', ()=> setMode(mode==='in'?'out':'in'));
+        let mode = "{{ mode|default:'out' }}";
+        function setMode(m){
+          mode = (m === 'in' ? 'in' : 'out');
+          pill.textContent = mode;
+          label.textContent = mode;
+          if (toggle) toggle.textContent = 'Toggle ' + (mode === 'in' ? 'OUT' : 'IN');
+        }
+        // Initialize UI to the current mode
+        setMode(mode);
+        toggle.addEventListener('click', function(){ setMode(mode==='in'?'out':'in'); input.focus(); input.select(); });
         input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); doScan(); }});
         submit.addEventListener('click', doScan);
 
