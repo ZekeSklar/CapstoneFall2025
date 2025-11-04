@@ -101,6 +101,12 @@
             <button class="button secondary compact" type="button" id="add-item">Add another item</button>
           {% endif %}
 
+          {{ form.drop_off_location.label_tag }}
+          {{ form.drop_off_location }}
+          {% if form.drop_off_location.errors %}
+            <div class="field-error">{{ form.drop_off_location.errors|join:', ' }}</div>
+          {% endif %}
+
           {{ form.details.label_tag }}
           {{ form.details }}
           {% if form.details.errors %}

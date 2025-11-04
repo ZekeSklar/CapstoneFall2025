@@ -301,6 +301,11 @@ def printer_order(request, qr_token):
 
                 extra.append(f"Item {idx}: {item['supply_type']} (qty {item['supply_quantity']})")
 
+            # Include drop-off location
+            drop = (form.cleaned_data.get('drop_off_location') or '').strip()
+            if drop:
+                extra.append(f"Drop-off location: {drop}")
+
             if ticket.applies_to_group and ticket.group:
                 group_name = ticket.group.name or 'group'
                 extra.append(f"Scope: Applies to entire group ({group_name})")
@@ -388,6 +393,10 @@ def printer_paper_order(request, qr_token):
                 item['supply_type'] = 'Copy paper (case)'
                 extra.append(f"Item {idx}: {item['supply_type']} (qty {item['supply_quantity']})")
 
+            # Include drop-off location
+            drop = (form.cleaned_data.get('drop_off_location') or '').strip()
+            if drop:
+                extra.append(f"Drop-off location: {drop}")
             ticket.details = _combine_details(form.cleaned_data.get('details'), extra)
             ticket.save()
 
@@ -790,6 +799,10 @@ def _handle_group_order_request(request, group: PrinterGroup, items_initial=None
 
 
 
+            # Include drop-off location
+            drop = (form.cleaned_data.get('drop_off_location') or '').strip()
+            if drop:
+                extra.append(f"Drop-off location: {drop}")
             ticket.details = _combine_details(form.cleaned_data.get('details'), extra)
 
             ticket.save()

@@ -88,6 +88,15 @@
           <div class="field-error">{{ form.requester_email.errors|join:', ' }}</div>
         {% endif %}
 
+        <label for="{{ form.drop_off_location.id_for_label }}">Drop-off location</label>
+        {{ form.drop_off_location }}
+        {% if form.drop_off_location.errors %}
+          <div class="field-error">{{ form.drop_off_location.errors|join:', ' }}</div>
+        {% endif %}
+        {% if form.requester_email.errors %}
+          <div class="field-error">{{ form.requester_email.errors|join:', ' }}</div>
+        {% endif %}
+
         <label for="details">Additional notes (optional)</label>
         <textarea name="details" id="details" rows="4" placeholder="Anything else we should know?">{{ form.details.value|default_if_none:'' }}</textarea>
         {% if form.details.errors %}

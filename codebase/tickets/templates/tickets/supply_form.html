@@ -93,6 +93,12 @@
           <div class="field-error">{{ form.requester_email.errors|join:', ' }}</div>
         {% endif %}
 
+        <label for="drop_off_location">Drop-off location</label>
+        <input type="text" name="drop_off_location" id="drop_off_location" value="{{ form.drop_off_location.value|default_if_none:'' }}" placeholder="Building / room or desk (e.g., Hutchins 101 front desk)" required>
+        {% if form.drop_off_location.errors %}
+          <div class="field-error">{{ form.drop_off_location.errors|join:', ' }}</div>
+        {% endif %}
+
         <label for="details">Additional notes (optional)</label>
         <textarea name="details" id="details" rows="4" placeholder="Anything else we should know?">{{ form.details.value|default_if_none:'' }}</textarea>
         {% if form.details.errors %}

@@ -7,6 +7,16 @@ from django.core.validators import RegexValidator
 
 class SupplyRequestForm(forms.ModelForm):
     apply_to_group = forms.BooleanField(required=False, label="Apply request to entire group")
+    drop_off_location = forms.CharField(
+        required=True,
+        max_length=120,
+        label="Drop-off location",
+        help_text="Where should we deliver these supplies?",
+        widget=forms.TextInput(attrs={
+            'placeholder': 'Building / room or desk (e.g., Hutchins 101 front desk)',
+            'autocomplete': 'off',
+        }),
+    )
 
     def __init__(self, *args, printer=None, user=None, manager_override=False, **kwargs):
         self.force_apply_to_group = kwargs.pop("force_apply_to_group", False)
