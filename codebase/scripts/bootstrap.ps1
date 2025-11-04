@@ -1,6 +1,6 @@
 param(
   [string]$RepoPath,
-  [string]$ServiceName = "printer-system",
+  [string]$ServiceName = "printer-system-dev",
   [int]$Port = 8000,
   [string]$PythonPath = "",
   [string]$NssmPath = "",
@@ -90,9 +90,9 @@ function Setup-App {
 }
 
 function Open-FirewallRule {
-  param([int]$Port)
+  param([int]$Port,[string]$SvcName)
   try {
-    $name = "printer-system-$Port"
+    $name = "$SvcName-$Port"
     if (-not (Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue)) {
       Write-Step "Opening Windows Firewall for TCP port $Port"
       New-NetFirewallRule -DisplayName $name -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow | Out-Null
@@ -107,12 +107,11 @@ Push-Location $repo
 
 Setup-App -Repo $repo
 
-if ($OpenFirewall) { Open-FirewallRule -Port $Port }
+if ($OpenFirewall) { Open-FirewallRule -Port $Port -SvcName $ServiceName }
 
 Write-Step "Installing Windows service via NSSM"
-& (Join-Path $PSScriptRoot 'install_service.ps1') -ServiceName $ServiceName -RepoPath $repo -Port $Port -NssmPath $NssmPath
+& (Join-Path $PSScriptRoot 'install_service.ps1') -ServiceName $ServiceName -RepoPath $repo -Port $Port -NssmPath $NssmPath -DisplayName "Printer System Dev"
 if ($LASTEXITCODE -ne 0) { Stop-Error "install_service.ps1 failed ($LASTEXITCODE)" }
 
 Write-Host "Bootstrap complete. Edit .env to adjust EMAIL_*/ALLOWED_HOSTS and restart the service if needed." -ForegroundColor Green
 Pop-Location
-

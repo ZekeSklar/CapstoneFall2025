@@ -2,7 +2,8 @@ param(
   [string]$ServiceName = "printer-system",
   [string]$RepoPath,
   [int]$Port = 8000,
-  [string]$NssmPath
+  [string]$NssmPath,
+  [string]$DisplayName = ""
 )
 
 function Find-Nssm {
@@ -47,6 +48,7 @@ Write-Host "Installing service '$ServiceName' using NSSM: $nssm"
 if ($LASTEXITCODE -ne 0) { throw "nssm install failed ($LASTEXITCODE)" }
 
 & $nssm set $ServiceName AppDirectory $RepoPath
+if ($DisplayName) { & $nssm set $ServiceName DisplayName $DisplayName }
 & $nssm set $ServiceName AppEnvironmentExtra "DJANGO_SETTINGS_MODULE=printer_system.settings"
 & $nssm set $ServiceName AppEnvironmentExtra "PYTHONUNBUFFERED=1"
 & $nssm set $ServiceName Start SERVICE_AUTO_START
@@ -61,4 +63,3 @@ Write-Host "Starting service '$ServiceName'..."
 if ($LASTEXITCODE -ne 0) { throw "nssm start failed ($LASTEXITCODE)" }
 
 Write-Host "Service '$ServiceName' installed and started. Listening on port $Port."
-
