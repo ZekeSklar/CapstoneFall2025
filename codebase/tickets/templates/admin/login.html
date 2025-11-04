@@ -1,5 +1,25 @@
 {% extends "admin/login.html" %}
 {% load static %}
 
-{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'tickets/admin.css' %}">{% endblock %}
-{% block extrahead %}{{ block.super }}<link rel="stylesheet" href="{% static 'tickets/admin.css' %}">{% endblock %}
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'tickets/admin.css' %}">
+{% endblock %}
+{% block extrahead %}
+  {{ block.super }}
+  <script>(function(){
+    try{
+      var KEY='django.admin.colorScheme';
+      if(!localStorage.getItem(KEY)){
+        localStorage.setItem(KEY, JSON.stringify({scheme:'dark'}));
+      }
+      var val = localStorage.getItem(KEY);
+      var scheme = 'dark';
+      try{ scheme = (JSON.parse(val)||{}).scheme || 'dark'; }catch(e){}
+      if(scheme==='dark'){
+        document.documentElement.setAttribute('data-theme','dark');
+      }
+    }catch(e){}
+  })();</script>
+  <link rel="stylesheet" href="{% static 'tickets/admin.css' %}">
+{% endblock %}
