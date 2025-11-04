@@ -76,6 +76,14 @@ This project runs as a Django site. On Windows, the simplest production setup is
       - `powershell -ExecutionPolicy Bypass -File scripts\remove_service.ps1 -ServiceName printer-system`
   - The service runs Waitress from your venv and logs to `data\service-stdout.log` and `data\service-stderr.log`.
 
+- Scheduled tasks (recommended)
+  - Use helper scripts (run PowerShell as Admin):
+    - Create tasks (daily summary at 07:00 and prewarm every 30 min):
+      - `powershell -ExecutionPolicy Bypass -File scripts\schedule_tasks.ps1 -ServiceName printer-system-dev -SummaryTime 07:00 -PrewarmEveryMinutes 30`
+      - Add `-RepoPath C:\path\to\repo` or `-AsSystem` if you want tasks to run as SYSTEM.
+    - Remove tasks:
+      - `powershell -ExecutionPolicy Bypass -File scripts\unschedule_tasks.ps1 -ServiceName printer-system-dev`
+
 - Backups
   - SQLite: stop the service (or quiesce writes) and copy `data/db.sqlite3`.
   - Portable export: `python manage.py dumpdata --natural-foreign --indent 2 > data/backup.json`
