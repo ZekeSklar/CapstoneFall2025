@@ -24,6 +24,8 @@ from tickets.views import (
     manager_printer_order,
     manager_status_feed,
     manager_printer_status,
+    inventory_scanner,
+    inventory_scan,
     printer_issue,
     printer_order,
     printer_paper_order,
@@ -46,4 +48,7 @@ urlpatterns = [
     path('p/<str:qr_token>/paper/', printer_paper_order, name='printer_paper_order'),
     path('p/<str:qr_token>/issue/', printer_issue, name='printer_issue'),
     path('thanks/', ticket_thanks, name='ticket_thanks'),
+    # Inventory scanner
+    path('scanner/', inventory_scanner, name='inventory_scanner'),
+    path('scanner/scan/', inventory_scan, name='inventory_scan'),
 ]

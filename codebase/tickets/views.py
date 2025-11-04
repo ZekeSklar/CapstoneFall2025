@@ -15,12 +15,13 @@ from django.http import JsonResponse
 
 from django.conf import settings
 from django.views.decorators.http import require_GET
+from django.views.decorators.csrf import csrf_exempt
 
 from django.utils import timezone
 
 
 
-from .models import Printer, PrinterGroup, RequestTicket
+from .models import Printer, PrinterGroup, RequestTicket, InventoryItem
 
 from .forms import SupplyRequestForm, IssueReportForm, SupplyItemFormSet
 from .printer_status import (
@@ -254,6 +255,64 @@ def manager_status_feed(request):
     resp = JsonResponse({'printers': payloads, 'poll_interval_seconds': POLL_INTERVAL_SECONDS})
     resp['Cache-Control'] = 'no-store'
     return resp
+
+
+# -------- Inventory barcode scanner --------
+@login_required(login_url=reverse_lazy('admin:login'))
+def inventory_scanner(request):
+    if not request.user.is_staff:
+        raise PermissionDenied('Scanner is restricted to staff users.')
+    mode = (request.GET.get('mode') or 'out').lower()
+    if mode not in ('in', 'out'):
+        mode = 'out'
+    preset = (request.GET.get('barcode') or '').strip()
+    return render(request, 'tickets/scanner.html', {
+        'mode': mode,
+        'preset_barcode': preset,
+    })
+
+
+@login_required(login_url=reverse_lazy('admin:login'))
+@require_GET
+def inventory_scan(request):
+    if not request.user.is_staff:
+        raise PermissionDenied('Scanner is restricted to staff users.')
+    barcode = (request.GET.get('barcode') or '').strip()
+    mode = (request.GET.get('mode') or 'out').lower()
+    if not barcode:
+        return JsonResponse({'ok': False, 'error': 'missing-barcode'}, status=400)
+    try:
+        item = InventoryItem.objects.get(barcode=barcode)
+    except InventoryItem.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'not-found', 'barcode': barcode}, status=404)
+
+    before = item.quantity_on_hand
+    delta = 1 if mode == 'in' else -1
+    if mode == 'out' and item.quantity_on_hand == 0:
+        after = 0
+        note = 'quantity-already-zero'
+    else:
+        item.quantity_on_hand = max(0, item.quantity_on_hand + delta)
+        item.save(update_fields=['quantity_on_hand'])
+        after = item.quantity_on_hand
+        note = 'ok'
+
+    return JsonResponse({
+        'ok': True,
+        'mode': mode,
+        'item': {
+            'id': item.id,
+            'name': item.name,
+            'model_number': item.model_number,
+            'category': item.category,
+            'shelf_code': item.shelf_code,
+            'barcode': item.barcode,
+        },
+        'before': before,
+        'after': after,
+        'delta': delta if note == 'ok' else 0,
+        'note': note,
+    })
 
 @login_required(login_url=reverse_lazy('admin:login'))
 

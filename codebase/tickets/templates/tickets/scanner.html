@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Inventory Scanner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root{
+        --bg:#080b12; --card:#121722; --border:#1d2433; --text:#e6ecff; --muted:#9aa3b8; --primary:#0b5cd6; --danger:#f97373;
+      }
+      *{box-sizing:border-box}
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:2rem 1rem;}
+      .layout{max-width:820px;margin:0 auto}
+      .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.5rem;margin-bottom:1.25rem;box-shadow:0 6px 14px rgba(8,11,18,.35)}
+      h1{margin:0 0 .75rem;font-size:1.7rem;font-weight:600}
+      .muted{color:var(--muted)}
+      .row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+      input[type=text]{flex:1 1 340px;min-width:260px;padding:.7rem .85rem;border:1px solid #273246;border-radius:8px;background:#0f141f;color:var(--text);font-size:1.05rem}
+      .btn{display:inline-flex;align-items:center;gap:.45rem;padding:.65rem 1.1rem;border-radius:8px;border:1px solid rgba(154,163,184,.35);background:#0f141f;color:var(--text);cursor:pointer}
+      .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+      .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .8rem;border-radius:999px;background:rgba(255,255,255,.06);color:var(--text);font-weight:600}
+      .list{margin-top:.85rem}
+      .ok{color:#7ee2a8}
+      .err{color:var(--danger)}
+      table{width:100%;border-collapse:collapse;margin-top:.65rem}
+      th,td{padding:.55rem .75rem;border-bottom:1px solid var(--border);text-align:left}
+      th{background:rgba(11,92,214,.18)}
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <div class="card">
+        <h1>Inventory Scanner</h1>
+        <p class="muted">Default mode is <strong id="mode-label">{{ mode|default:'out' }}</strong>. Scan a barcode and press Enter (most scanners send Enter automatically).</p>
+        <div class="row" style="margin-top:.75rem;">
+          <input autofocus type="text" id="barcode" placeholder="Scan or type barcode" value="{{ preset_barcode }}">
+          <button class="btn" id="mode-toggle" type="button">Toggle IN/OUT</button>
+          <button class="btn primary" id="submit" type="button">Submit</button>
+        </div>
+        <div class="pill" style="margin-top:.6rem;">Mode: <span id="mode-pill">{{ mode|default:'out' }}</span></div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin:0 0 .65rem">Recent scans</h2>
+        <table id="results">
+          <thead>
+            <tr><th>Time</th><th>Mode</th><th>Item</th><th>Qty</th><th>Shelf</th><th>Status</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        const input = document.getElementById('barcode');
+        const submit = document.getElementById('submit');
+        const toggle = document.getElementById('mode-toggle');
+        const pill = document.getElementById('mode-pill');
+        const label = document.getElementById('mode-label');
+        const tableBody = document.querySelector('#results tbody');
+        let mode = ({{ mode|default:'"out"'|safe }}) || 'out';
+        function setMode(m){ mode = (m==='in'?'in':'out'); pill.textContent = mode; label.textContent = mode; }
+        toggle.addEventListener('click', ()=> setMode(mode==='in'?'out':'in'));
+        input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); doScan(); }});
+        submit.addEventListener('click', doScan);
+
+        function doScan(){
+          const code = input.value.trim();
+          if(!code){ input.focus(); return; }
+          const url = new URL(window.location.origin + '{% url "inventory_scan" %}');
+          url.searchParams.set('barcode', code);
+          url.searchParams.set('mode', mode);
+          fetch(url.toString(), { headers: { 'Accept': 'application/json' }})
+            .then(r=>r.json().then(j=>({ok:r.ok, status:r.status, body:j})))
+            .then(({ok, body})=>{
+              const tr = document.createElement('tr');
+              const ts = new Date().toLocaleTimeString();
+              if(ok && body && body.ok){
+                tr.innerHTML = `<td>${ts}</td><td>${body.mode}</td><td>${body.item.name}</td><td>${body.after}</td><td>${body.item.shelf_code||''}</td><td class="ok">${body.note==='ok'?'Updated':'No change'}</td>`;
+              } else {
+                const err = (body && body.error) || 'error';
+                tr.innerHTML = `<td>${ts}</td><td>${mode}</td><td>${code}</td><td>-</td><td>-</td><td class="err">${err}</td>`;
+              }
+              tableBody.prepend(tr);
+              input.select();
+            })
+            .catch(()=>{
+              const tr = document.createElement('tr');
+              tr.innerHTML = `<td>${new Date().toLocaleTimeString()}</td><td>${mode}</td><td>${code}</td><td>-</td><td>-</td><td class="err">network-error</td>`;
+              tableBody.prepend(tr);
+            });
+        }
+      })();
+    </script>
+  </body>
+  </html>
+

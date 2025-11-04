@@ -130,15 +130,33 @@ admin.site.__class__ = CustomAdminSite
 class InventoryItemAdmin(admin.ModelAdmin):
     form = InventoryItemAdminForm
     list_display = (
-        'name', 'category', 'quantity_on_hand', 'reorder_threshold', 'shelf_location',
+        'name', 'category', 'quantity_on_hand', 'reorder_threshold', 'shelf_location', 'barcode',
     )
     list_filter = ('category', 'shelf_row')
-    search_fields = ('name', 'model_number', 'shelf_row')
+    search_fields = ('name', 'model_number', 'shelf_row', 'barcode')
     ordering = ('shelf_row', 'shelf_column', 'name')
+    readonly_fields = ('shelf_location', 'scanner_links')
 
     def shelf_location(self, obj):
         return obj.shelf_code or '-'
     shelf_location.short_description = 'Shelf'
+
+    def get_fields(self, request, obj=None):
+        fields = list(super().get_fields(request, obj))
+        if 'scanner_links' not in fields:
+            fields.append('scanner_links')
+        return fields
+
+    def scanner_links(self, obj):
+        if not obj or not obj.barcode:
+            return mark_safe('<div class="muted">Set a barcode to enable quick scan links.</div>')
+        url_out = reverse('inventory_scanner') + f'?mode=out&barcode={obj.barcode}'
+        url_in = reverse('inventory_scanner') + f'?mode=in&barcode={obj.barcode}'
+        return mark_safe(
+            f'<a class="button" href="{url_in}" target="_blank">Add to inventory (scan)</a>'
+            f' &nbsp; <a class="button" href="{url_out}" target="_blank">Remove from inventory (scan)</a>'
+        )
+    scanner_links.short_description = 'Scanner'
 
     class Media:
         js = ('tickets/js/inventory_item_admin.js',)

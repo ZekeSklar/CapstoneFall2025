@@ -29,6 +29,15 @@ class InventoryItem(models.Model):
     quantity_on_hand = models.PositiveIntegerField(default=0)
     reorder_threshold = models.PositiveIntegerField(default=1)
     compatible_printers = models.ManyToManyField('Printer', blank=True)
+    # Optional barcode/UPC/EAN text for scanning workflows
+    barcode = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        unique=True,
+        db_index=True,
+        help_text="Optional UPC/EAN/Code128 text used by the scanner page.",
+    )
     # Optional physical shelf location
     # Rows are letters (e.g., A, B, ... or AA), columns are numbers (e.g., 1, 2, 10)
     shelf_row = models.CharField(
