@@ -72,13 +72,26 @@
         input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); doScan(); }});
         submit.addEventListener('click', doScan);
 
+        function getCookie(name){
+          const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+          return m ? m.pop() : '';
+        }
         function doScan(){
           const code = input.value.trim();
           if(!code){ input.focus(); return; }
-          const url = new URL(window.location.origin + '{% url "inventory_scan" %}');
-          url.searchParams.set('barcode', code);
-          url.searchParams.set('mode', mode);
-          fetch(url.toString(), { headers: { 'Accept': 'application/json' }})
+          const url = '{% url "inventory_scan" %}';
+          const params = new URLSearchParams();
+          params.set('barcode', code);
+          params.set('mode', mode);
+          fetch(url, {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: params.toString()
+          })
             .then(r=>r.json().then(j=>({ok:r.ok, status:r.status, body:j})))
             .then(({ok, body})=>{
               const tr = document.createElement('tr');

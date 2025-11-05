@@ -14,8 +14,8 @@ from django.core.mail import send_mail
 from django.http import JsonResponse
 
 from django.conf import settings
-from django.views.decorators.http import require_GET
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from django.utils import timezone
 
@@ -259,6 +259,7 @@ def manager_status_feed(request):
 
 # -------- Inventory barcode scanner --------
 @login_required(login_url=reverse_lazy('admin:login'))
+@ensure_csrf_cookie
 def inventory_scanner(request):
     if not request.user.is_staff:
         raise PermissionDenied('Scanner is restricted to staff users.')
@@ -273,12 +274,12 @@ def inventory_scanner(request):
 
 
 @login_required(login_url=reverse_lazy('admin:login'))
-@require_GET
+@require_POST
 def inventory_scan(request):
     if not request.user.is_staff:
         raise PermissionDenied('Scanner is restricted to staff users.')
-    barcode = (request.GET.get('barcode') or '').strip()
-    mode = (request.GET.get('mode') or 'out').lower()
+    barcode = (request.POST.get('barcode') or '').strip()
+    mode = (request.POST.get('mode') or 'out').lower()
     if not barcode:
         return JsonResponse({'ok': False, 'error': 'missing-barcode'}, status=400)
     try:

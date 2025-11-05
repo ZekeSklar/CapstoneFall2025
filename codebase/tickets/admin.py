@@ -126,8 +126,13 @@ class CustomAdminSite(admin.AdminSite):
 # Swap out the default admin site for the custom one
 admin.site.__class__ = CustomAdminSite
 # ---------- InventoryItem Admin ----------
+class InventoryItemResource(resources.ModelResource):
+    class Meta:
+        model = InventoryItem
+
+
 @admin.register(InventoryItem)
-class InventoryItemAdmin(admin.ModelAdmin):
+class InventoryItemAdmin(ImportExportModelAdmin):
     form = InventoryItemAdminForm
     list_display = (
         'name', 'category', 'quantity_on_hand', 'reorder_threshold', 'shelf_location', 'barcode',
@@ -136,6 +141,7 @@ class InventoryItemAdmin(admin.ModelAdmin):
     search_fields = ('name', 'model_number', 'shelf_row', 'barcode')
     ordering = ('shelf_row', 'shelf_column', 'name')
     readonly_fields = ('shelf_location', 'scanner_links')
+    resource_class = InventoryItemResource
 
     def shelf_location(self, obj):
         return obj.shelf_code or '-'
