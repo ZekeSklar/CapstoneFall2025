@@ -222,3 +222,17 @@ SNMP_POLL_INTERVAL_SECONDS = int(os.getenv("SNMP_POLL_INTERVAL_SECONDS", "300"))
 LOGIN_URL = 'admin:login'
 LOGOUT_REDIRECT_URL = 'admin:login'
 
+# --- Reverse proxy / HTTPS / CSRF ---
+# Ensure Django recognizes HTTPS when behind a proxy (e.g., DigitalOcean App Platform)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
+# Secure cookies in non-debug environments
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
+# Parse trusted origins for CSRF validation (comma-separated, include scheme)
+_CSRF_TRUSTED_ORIGINS_RAW = os.getenv("CSRF_TRUSTED_ORIGINS", "").strip()
+if _CSRF_TRUSTED_ORIGINS_RAW:
+    CSRF_TRUSTED_ORIGINS = [v.strip() for v in _CSRF_TRUSTED_ORIGINS_RAW.split(',') if v.strip()]
+
