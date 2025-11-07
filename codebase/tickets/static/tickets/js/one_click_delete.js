@@ -13,7 +13,7 @@
 
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.textContent = '✖ Delete';
+    btn.textContent = 'Delete';
     btn.style.marginLeft = '0.5rem';
     btn.className = 'one-click-delete-btn';
 
@@ -24,7 +24,7 @@
       if(row){ row.style.opacity = '0.55'; row.style.transition = 'opacity .2s'; }
       const form = cb.form || document.querySelector('form#change-form') || document.querySelector('form');
       // Hold Shift to skip confirm and submit immediately.
-      const auto = ev.shiftKey || window.confirm('Delete this item now and save changes?');
+      const auto = ev.shiftKey || window.confirm('Delete this comment now and save changes?');
       if(auto && form){
         // Ensure the admin treats this as a regular Save
         const hidden = document.createElement('input');
@@ -38,6 +38,23 @@
 
     // Insert button right after the checkbox
     cb.insertAdjacentElement('afterend', btn);
+
+    // If the user clicks the built-in delete checkbox directly, auto-submit too
+    cb.addEventListener('change', function(){
+      if(!cb.checked) return;
+      const form = cb.form || document.querySelector('form#change-form') || document.querySelector('form');
+      const ok = window.confirm('Delete this comment now and save changes?');
+      if(ok && form){
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = '_save';
+        hidden.value = 'Save';
+        form.appendChild(hidden);
+        form.submit();
+      } else if(!ok) {
+        try { cb.checked = false; } catch(_e) {}
+      }
+    });
   }
 
   function scan(){
@@ -54,3 +71,4 @@
     mo.observe(root, { childList: true, subtree: true });
   } catch(_e) { /* ignore */ }
 })();
+

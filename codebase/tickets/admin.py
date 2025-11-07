@@ -9,7 +9,6 @@ from django.urls import path, reverse
 from django.template.response import TemplateResponse
 from django.http import Http404, HttpResponse, JsonResponse
 from django.utils.safestring import mark_safe
-from django.utils.html import format_html
 import json
 import csv
 from .printer_status import POLL_INTERVAL_SECONDS, ensure_latest_status, build_status_payload
@@ -20,6 +19,7 @@ from .models import (
     Printer,
     PrinterComment,
     PrinterGroup,
+    PrinterStatus,
     RequestTicket,
 )
 # Inline for PrinterComment
@@ -83,7 +83,6 @@ class CustomAdminSite(admin.AdminSite):
     def index(self, request, extra_context=None):
         low_inventory_items = InventoryItem.objects.filter(quantity_on_hand__lte=models.F('reorder_threshold'))
         # Missing data summary for printers
-        from .models import Printer, PrinterStatus
         generic_values = {
             'mac_address': 'UNKNOWN-MACADDRESS',
             'ip_address': '0.0.0.0',
@@ -134,6 +133,7 @@ class InventoryItemResource(resources.ModelResource):
 @admin.register(InventoryItem)
 class InventoryItemAdmin(ImportExportModelAdmin):
     form = InventoryItemAdminForm
+    autocomplete_fields = ('compatible_printers',)
     list_display = (
         'name', 'category', 'quantity_on_hand', 'reorder_threshold', 'shelf_location', 'barcode',
     )
@@ -164,8 +164,95 @@ class InventoryItemAdmin(ImportExportModelAdmin):
         )
     scanner_links.short_description = 'Scanner'
 
+    
+
     class Media:
         js = ('tickets/js/inventory_item_admin.js',)
+
+    # Provide the picker URL to the widget so JS can open it
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        field = super().formfield_for_manytomany(db_field, request, **kwargs)
+        if db_field.name == 'compatible_printers':
+            try:
+                picker_url = reverse('admin:tickets_inventoryitem_pick_printers')
+            except Exception:
+                picker_url = '/admin/tickets/inventoryitem/pick_printers/'
+            try:
+                field.widget.attrs['data-pick-url'] = picker_url
+            except Exception:
+                pass
+            btn = (
+                f"<a href=\"{picker_url}\" class=\"button pick-printers-btn\" "
+                f"onclick=\"(function(ev){{ev.preventDefault();var sel=document.getElementById('id_compatible_printers');var url='{picker_url}';"
+                f"if(sel){{var ids=[];for(var i=0;i<sel.options.length;i++){{if(sel.options[i].selected){{ids.push(sel.options[i].value);}}}}"
+                f" if(ids.length){{url+=(url.indexOf('?')>-1?'&':'?')+'selected='+encodeURIComponent(ids.join(','));}}}}"
+                f"window.open(url,'pick_printers','width=900,height=650,menubar=0,toolbar=0,location=0');}})(event)\">Pick printers…</a>"
+            )
+            help_html = (field.help_text or "")
+            # Help note only; the interactive "Pick printers" button is injected by JS
+            field.help_text = mark_safe((help_html + " ") + "<span class=\"help\">Search by make/model and add multiple.</span>")
+        return field
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path('pick_printers/', self.admin_site.admin_view(self.pick_printers_view), name='tickets_inventoryitem_pick_printers'),
+        ]
+        return custom + urls
+
+    def pick_printers_view(self, request):
+        # Simple make/model search with checkbox results for bulk add
+        make_q = (request.GET.get('make') or '').strip()
+        model_q = (request.GET.get('model') or '').strip()
+        selected_raw = (request.GET.get('selected') or '').strip()
+        try:
+            selected_ids = [int(x) for x in selected_raw.split(',') if x.strip().isdigit()]
+        except Exception:
+            selected_ids = []
+
+        qs = Printer.objects.all()
+        if make_q:
+            qs = qs.filter(make__icontains=make_q)
+        if model_q:
+            qs = qs.filter(model__icontains=model_q)
+        qs = qs.order_by('make', 'model', 'building', 'campus_label')[:300]
+
+        # Build lightweight rows for the template
+        rows = []
+        for p in qs:
+            label = f"{p.make} {p.model} — {p.campus_label} ({p.building} / {p.location_in_building})"
+            rows.append({'id': p.id, 'label': label, 'selected': p.id in selected_ids})
+            try:
+                rows[-1]['label'] = rows[-1]['label'].encode('latin1').decode('utf-8')
+            except Exception:
+                pass
+            rows[-1]['label'] = rows[-1]['label'].replace('—', '-')
+
+        base_ctx = {}
+        try:
+            # Ensure admin branding (site_header, site_title, etc.) is available
+            base_ctx = self.admin_site.each_context(request)
+        except Exception:
+            base_ctx = {}
+        # Build dropdown options for make/model (typeable suggestions)
+        make_options = (
+            Printer.objects.exclude(make="").order_by('make').values_list('make', flat=True).distinct()
+        )
+        model_base_qs = Printer.objects.exclude(model="")
+        if make_q:
+            model_base_qs = model_base_qs.filter(make__icontains=make_q)
+        model_options = model_base_qs.order_by('model').values_list('model', flat=True).distinct()
+        ctx = {
+            **base_ctx,
+            'title': 'Select compatible printers',
+            'rows': rows,
+            'make_q': make_q,
+            'model_q': model_q,
+            'selected_ids': selected_ids,
+            'make_options': list(make_options)[:500],
+            'model_options': list(model_options)[:500],
+        }
+        return TemplateResponse(request, 'admin/tickets/inventoryitem/pick_printers.html', ctx)
 
 
 @admin.register(PrinterGroup)
@@ -224,22 +311,22 @@ class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
     ordering = ("campus_label",)
     list_per_page = 50
     actions = ["export_printers_csv"]
-    # Expose custom HTML panel as a readonly field
-    readonly_fields = ("_live_device_status",)
+    # Live status panel is provided via a template override
+
+    def get_search_fields(self, request):
+        base = super().get_search_fields(request)
+        path = getattr(request, "path", "") or ""
+        referer = (request.META.get("HTTP_REFERER") or "")
+        field_name = (request.GET.get("field_name") or request.GET.get("field") or "")
+        is_autocomplete = path.endswith("/autocomplete/")
+        from_inventory = ("/admin/tickets/inventoryitem/" in referer)
+        if is_autocomplete and (field_name == "compatible_printers" or from_inventory):
+            return ("make", "model")
+        return base
 
     def get_fieldsets(self, request, obj=None):
-        # Ensure a list so we can append regardless of Django's return type
-        fieldsets = list(super().get_fieldsets(request, obj) or [])
-        # Append our status panel after main field groups, before inlines
-        extra = (
-            "Live Device Status",
-            {
-                "fields": ("_live_device_status",),
-                "classes": ("wide",),
-            },
-        )
-        fieldsets.append(extra)
-        return fieldsets
+        # Use default fieldsets; live status panel is provided via template override
+        return super().get_fieldsets(request, obj)
 
     def _live_device_status(self, obj):
         if not obj:
@@ -344,7 +431,6 @@ class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
     def printer_status_view(self, request, object_id):
         printer = self.get_object(request, object_id)
         if printer is None:
-            from django.http import Http404
             raise Http404('Printer not found')
         force_flag = request.GET.get('force') or request.GET.get('refresh')
         force = bool(force_flag and force_flag.strip().lower() in _ADMIN_TRUTHY_VALUES)
@@ -378,6 +464,14 @@ class PrinterAdmin(AdminCSSMixin, ImportExportModelAdmin):
 
     def save_formset(self, request, form, formset, change):
         instances = formset.save(commit=False)
+        # Process deletions explicitly (commit=False skips deletes)
+        for obj in getattr(formset, 'deleted_objects', []):
+            try:
+                obj.delete()
+            except Exception:
+                # Best-effort: continue saving the rest even if a delete fails
+                pass
+        # Save new and changed instances
         for obj in instances:
             if isinstance(obj, PrinterComment) and not obj.user_id:
                 obj.user = request.user
@@ -492,9 +586,9 @@ except admin.sites.NotRegistered:  # pragma: no cover
 admin.site.register(User, IssueSummaryUserAdmin)
 
 # ---- Custom Admin Branding ----
-admin.site.site_header = "Berea College Printing Services"
+admin.site.site_header = "Berea College Print Services"
 admin.site.site_title = "Berea College Admin Portal"
-admin.site.index_title = "Welcome to Berea College Printing Services Admin"
+admin.site.index_title = "Welcome to Berea College Print Services Admin"
 
 
 

@@ -7,7 +7,7 @@ installed app and should not declare its own models. To avoid confusion and
 support imports like `from printer_system.models import Printer`, this module
 re-exports the real models from `tickets.models`.
 
-Do not add new model classes here — put them in `tickets/models.py` instead.
+Do not add new model classes here - put them in `tickets/models.py` instead.
 """
 
 from tickets.models import (

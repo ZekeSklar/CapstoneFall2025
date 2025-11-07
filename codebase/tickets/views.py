@@ -23,7 +23,13 @@ from django.utils import timezone
 
 from .models import Printer, PrinterGroup, RequestTicket, InventoryItem
 
-from .forms import SupplyRequestForm, IssueReportForm, SupplyItemFormSet
+from .forms import (
+    SupplyRequestForm,
+    IssueReportForm,
+    SupplyItemFormSet,
+    InventorySupplyItemFormSet,
+    OTHER_SENTINEL,
+)
 from .printer_status import (
     POLL_INTERVAL_SECONDS,
     ensure_latest_status,
@@ -174,6 +180,11 @@ def _query_flag(request, name: str) -> bool:
 
 
 def printer_portal(request, qr_token):
+    """Public QR entry: show basic info and actions for a printer.
+
+    - Always visible to anyone for reporting an issue.
+    - Ordering flows require staff auth; the template adjusts the actions.
+    """
 
     printer = get_object_or_404(Printer, qr_token=qr_token)
 
@@ -202,8 +213,6 @@ def printer_portal(request, qr_token):
 
 @login_required
 @require_GET
-@login_required
-@require_GET
 def manager_printer_status(request, printer_id):
     """Manager-only status endpoint (by printer id). Returns same shape as manager feed.
 
@@ -224,6 +233,12 @@ def manager_printer_status(request, printer_id):
 @login_required
 @require_GET
 def manager_status_feed(request):
+    """Manager JSON feed for live device status.
+
+    Optional GET params:
+    - printer: restrict to a single printer id (permission checked)
+    - force/refresh: bypass cache and poll SNMP now
+    """
 
     force = _query_flag(request, 'force') or _query_flag(request, 'refresh')
     printer_id = request.GET.get('printer')
@@ -261,6 +276,7 @@ def manager_status_feed(request):
 @login_required(login_url=reverse_lazy('admin:login'))
 @ensure_csrf_cookie
 def inventory_scanner(request):
+    """Render the barcode scanner page for inventory in/out adjustments (staff only)."""
     if not request.user.is_staff:
         raise PermissionDenied('Scanner is restricted to staff users.')
     mode = (request.GET.get('mode') or 'out').lower()
@@ -276,10 +292,12 @@ def inventory_scanner(request):
 @login_required(login_url=reverse_lazy('admin:login'))
 @require_POST
 def inventory_scan(request):
+    """Handle POSTed barcode scan to increment/decrement inventory quantities (staff only)."""
     if not request.user.is_staff:
         raise PermissionDenied('Scanner is restricted to staff users.')
     barcode = (request.POST.get('barcode') or '').strip()
     mode = (request.POST.get('mode') or 'out').lower()
+    destination = (request.POST.get('destination') or '').strip()
     if not barcode:
         return JsonResponse({'ok': False, 'error': 'missing-barcode'}, status=400)
     try:
@@ -298,6 +316,21 @@ def inventory_scan(request):
         after = item.quantity_on_hand
         note = 'ok'
 
+    # Best-effort append to a scan log for audit purposes
+    try:
+        user = getattr(request, 'user', None)
+        user_repr = user.get_username() if getattr(user, 'is_authenticated', False) else 'anon'
+        log_path = settings.BASE_DIR / 'data' / 'inventory_scans.log'
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, 'a', encoding='utf-8') as fh:
+            fh.write(
+                f"{timezone.now().isoformat()} mode={mode} user={user_repr} "
+                f"item_id={item.id} barcode={barcode} before={before} after={after} "
+                f"destination={destination!r}\n"
+            )
+    except Exception:
+        pass
+
     return JsonResponse({
         'ok': True,
         'mode': mode,
@@ -313,6 +346,7 @@ def inventory_scan(request):
         'after': after,
         'delta': delta if note == 'ok' else 0,
         'note': note,
+        'destination': destination if mode == 'out' else '',
     })
 
 @login_required(login_url=reverse_lazy('admin:login'))
@@ -327,9 +361,13 @@ def printer_order(request, qr_token):
 
 
 
+    # Build allowed inventory list for this printer
+    allowed_items = InventoryItem.objects.filter(compatible_printers=printer).order_by('name').distinct()
+    allowed_map = {str(x.id): x for x in allowed_items}
+
     if request.method == 'POST':
 
-        items_formset = SupplyItemFormSet(request.POST, prefix='items')
+        items_formset = InventorySupplyItemFormSet(request.POST, prefix='items', allowed_items_qs=allowed_items)
 
         form = SupplyRequestForm(request.POST, printer=printer)
 
@@ -354,12 +392,20 @@ def printer_order(request, qr_token):
             extra = []
 
             for idx, item in enumerate([item for item in items_formset.cleaned_data if item], start=1):
-
                 if not item:
-
                     continue
-
-                extra.append(f"Item {idx}: {item['supply_type']} (qty {item['supply_quantity']})")
+                selected = item.get('supply_item')
+                qty = item.get('supply_quantity')
+                if selected == OTHER_SENTINEL:
+                    other_text = (item.get('supply_other') or '').strip() or 'unspecified'
+                    extra.append(f"Item {idx}: Other / Not listed — {other_text} (qty {qty})")
+                else:
+                    inv = allowed_map.get(str(selected))
+                    if inv:
+                        label = f"{inv.name} ({inv.category})"
+                        if inv.model_number:
+                            label += f" [{inv.model_number}]"
+                        extra.append(f"Item {idx}: {label} (qty {qty})")
 
             # Include drop-off location
             drop = (form.cleaned_data.get('drop_off_location') or '').strip()
@@ -388,7 +434,7 @@ def printer_order(request, qr_token):
 
         form = SupplyRequestForm(printer=printer)
 
-        items_formset = SupplyItemFormSet(prefix='items', initial=[{}])
+        items_formset = InventorySupplyItemFormSet(prefix='items', initial=[{}], allowed_items_qs=allowed_items)
 
 
 
@@ -407,6 +453,7 @@ def printer_order(request, qr_token):
         'form': form,
 
         'items_formset': items_formset,
+        'allowed_items': list(allowed_items),
 
         'group_printers': group_printers,
 
@@ -671,9 +718,13 @@ def manager_printer_order(request, printer_id):
 
 
 
+    # Allowed inventory for this printer
+    allowed_items = InventoryItem.objects.filter(compatible_printers=printer).order_by('name').distinct()
+    allowed_map = {str(x.id): x for x in allowed_items}
+
     if request.method == 'POST':
 
-        items_formset = SupplyItemFormSet(request.POST, prefix='items')
+        items_formset = InventorySupplyItemFormSet(request.POST, prefix='items', allowed_items_qs=allowed_items)
 
         form = SupplyRequestForm(
 
@@ -708,12 +759,20 @@ def manager_printer_order(request, printer_id):
             extra = []
 
             for idx, item in enumerate([item for item in items_formset.cleaned_data if item], start=1):
-
                 if not item:
-
                     continue
-
-                extra.append(f"Item {idx}: {item['supply_type']} (qty {item['supply_quantity']})")
+                selected = item.get('supply_item')
+                qty = item.get('supply_quantity')
+                if selected == OTHER_SENTINEL:
+                    other_text = (item.get('supply_other') or '').strip() or 'unspecified'
+                    extra.append(f"Item {idx}: Other / Not listed — {other_text} (qty {qty})")
+                else:
+                    inv = allowed_map.get(str(selected))
+                    if inv:
+                        label = f"{inv.name} ({inv.category})"
+                        if inv.model_number:
+                            label += f" [{inv.model_number}]"
+                        extra.append(f"Item {idx}: {label} (qty {qty})")
 
             if ticket.applies_to_group and ticket.group:
 
@@ -751,7 +810,7 @@ def manager_printer_order(request, printer_id):
 
         )
 
-        items_formset = SupplyItemFormSet(prefix='items', initial=[{}])
+        items_formset = InventorySupplyItemFormSet(prefix='items', initial=[{}], allowed_items_qs=allowed_items)
 
 
 
@@ -768,6 +827,7 @@ def manager_printer_order(request, printer_id):
         'form': form,
 
         'items_formset': items_formset,
+        'allowed_items': list(allowed_items),
 
         'group_printers': list(printer.group.printers.order_by('campus_label')) if printer.group else None,
 
@@ -811,9 +871,14 @@ def _handle_group_order_request(request, group: PrinterGroup, items_initial=None
 
 
 
+    # Allowed inventory for any printer within the group
+    group_printers_qs = group.printers.all()
+    allowed_items = InventoryItem.objects.filter(compatible_printers__in=group_printers_qs).order_by('name').distinct()
+    allowed_map = {str(x.id): x for x in allowed_items}
+
     if request.method == 'POST':
 
-        items_formset = SupplyItemFormSet(request.POST, prefix='items')
+        items_formset = InventorySupplyItemFormSet(request.POST, prefix='items', allowed_items_qs=allowed_items)
 
         form = SupplyRequestForm(
 
@@ -846,12 +911,20 @@ def _handle_group_order_request(request, group: PrinterGroup, items_initial=None
             extra = []
 
             for idx, item in enumerate([item for item in items_formset.cleaned_data if item], start=1):
-
                 if not item:
-
                     continue
-
-                extra.append(f"Item {idx}: {item['supply_type']} (qty {item['supply_quantity']})")
+                selected = item.get('supply_item')
+                qty = item.get('supply_quantity')
+                if selected == OTHER_SENTINEL:
+                    other_text = (item.get('supply_other') or '').strip() or 'unspecified'
+                    extra.append(f"Item {idx}: Other / Not listed — {other_text} (qty {qty})")
+                else:
+                    inv = allowed_map.get(str(selected))
+                    if inv:
+                        label = f"{inv.name} ({inv.category})"
+                        if inv.model_number:
+                            label += f" [{inv.model_number}]"
+                        extra.append(f"Item {idx}: {label} (qty {qty})")
 
             group_name = group.name or 'group'
 
@@ -879,7 +952,7 @@ def _handle_group_order_request(request, group: PrinterGroup, items_initial=None
 
         initial_items = items_initial if items_initial is not None else [{}]
 
-        items_formset = SupplyItemFormSet(prefix='items', initial=initial_items)
+        items_formset = InventorySupplyItemFormSet(prefix='items', initial=initial_items, allowed_items_qs=allowed_items)
 
         form = SupplyRequestForm(
 
@@ -910,6 +983,7 @@ def _handle_group_order_request(request, group: PrinterGroup, items_initial=None
         'form': form,
 
         'items_formset': items_formset,
+        'allowed_items': list(allowed_items),
 
         'group_printers': list(group.printers.order_by('campus_label')),
 

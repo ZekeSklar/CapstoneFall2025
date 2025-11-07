@@ -24,7 +24,7 @@ except Exception:
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load .env in development
+# Load .env if present
 env_path = BASE_DIR / ".env"
 if env_path.exists():
     load_dotenv(env_path)
@@ -36,13 +36,28 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-j#u*=f$c^gp7m7vyyg6^ihlb9n%!&64zj-!gdvko$=cm9(tg&a'
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Safer default: DEBUG is false unless explicitly enabled via environment.
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
-ALLOWED_HOSTS = ['*']  # Allow all hosts to access the development server
+# SECURITY WARNING: keep the secret key used in production secret!
+# Require SECRET_KEY via environment unless in explicit DEBUG mode.
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "dev-insecure-secret-key"
+    else:
+        raise RuntimeError(
+            "SECRET_KEY is not set. Set SECRET_KEY in the environment or enable DEBUG=true for local dev."
+        )
+
+# Hosts configuration: read from env (comma-separated). If unset, allow all in
+# DEBUG mode for local development, and require explicit hosts in production.
+_ALLOWED_HOSTS_RAW = os.getenv("ALLOWED_HOSTS", "").strip()
+if _ALLOWED_HOSTS_RAW:
+    ALLOWED_HOSTS = [h.strip() for h in _ALLOWED_HOSTS_RAW.split(',') if h.strip()]
+else:
+    ALLOWED_HOSTS = ['*'] if DEBUG else []
 
 
 # Application definition

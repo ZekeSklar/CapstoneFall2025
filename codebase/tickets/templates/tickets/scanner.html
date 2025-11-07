@@ -31,9 +31,10 @@
     <div class="layout">
       <div class="card">
         <h1>Inventory Scanner</h1>
-        <p class="muted">Default mode is <strong id="mode-label">{{ mode|default:'out' }}</strong>. Scan a barcode and press Enter (most scanners send Enter automatically).</p>
+        <p class="muted">Default mode is <strong id="mode-label">{{ mode|default:'out' }}</strong>. Scan a barcode and press Enter or Tab (most scanners send one of these automatically).</p>
         <div class="row" style="margin-top:.75rem;">
           <input autofocus type="text" id="barcode" placeholder="Scan or type barcode" value="{{ preset_barcode }}">
+          <input type="text" id="destination" placeholder="To (person, printer, or note)" style="display:none" aria-label="Destination">
           <button class="btn" id="mode-toggle" type="button">Toggle IN/OUT</button>
           <button class="btn primary" id="submit" type="button">Submit</button>
         </div>
@@ -44,7 +45,7 @@
         <h2 style="margin:0 0 .65rem">Recent scans</h2>
         <table id="results">
           <thead>
-            <tr><th>Time</th><th>Mode</th><th>Item</th><th>Qty</th><th>Shelf</th><th>Status</th></tr>
+            <tr><th>Time</th><th>Mode</th><th>Item</th><th>Qty</th><th>Shelf</th><th>To</th><th>Status</th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -56,6 +57,7 @@
         const input = document.getElementById('barcode');
         const submit = document.getElementById('submit');
         const toggle = document.getElementById('mode-toggle');
+        const destInput = document.getElementById('destination');
         const pill = document.getElementById('mode-pill');
         const label = document.getElementById('mode-label');
         const tableBody = document.querySelector('#results tbody');
@@ -65,11 +67,17 @@
           pill.textContent = mode;
           label.textContent = mode;
           if (toggle) toggle.textContent = 'Toggle ' + (mode === 'in' ? 'OUT' : 'IN');
+          if (destInput) destInput.style.display = (mode === 'out' ? '' : 'none');
         }
         // Initialize UI to the current mode
         setMode(mode);
         toggle.addEventListener('click', function(){ setMode(mode==='in'?'out':'in'); input.focus(); input.select(); });
-        input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); doScan(); }});
+        input.addEventListener('keydown', e=>{
+          if(e.key==='Enter' || e.key==='Tab'){
+            e.preventDefault();
+            doScan();
+          }
+        });
         submit.addEventListener('click', doScan);
 
         function getCookie(name){
@@ -79,10 +87,16 @@
         function doScan(){
           const code = input.value.trim();
           if(!code){ input.focus(); return; }
+          input.value = '';
+          input.focus();
           const url = '{% url "inventory_scan" %}';
           const params = new URLSearchParams();
           params.set('barcode', code);
           params.set('mode', mode);
+          if (mode === 'out' && destInput) {
+            const dest = (destInput.value || '').trim();
+            if (dest) params.set('destination', dest);
+          }
           fetch(url, {
             method: 'POST',
             headers: {
@@ -101,14 +115,27 @@
               } else {
                 const err = (body && body.error) || 'error';
                 tr.innerHTML = `<td>${ts}</td><td>${mode}</td><td>${code}</td><td>-</td><td>-</td><td class="err">${err}</td>`;
-              }
+              } 
+              // Insert destination column before status cell
+              try {
+                const cells = tr.querySelectorAll('td');
+                if (cells.length >= 6) {
+                  const statusCell = cells[cells.length-1];
+                  const destCell = document.createElement('td');
+                  destCell.textContent = (ok && body && body.ok && body.destination) ? body.destination : '';
+                  tr.insertBefore(destCell, statusCell);
+                }
+              } catch(_e) {}
               tableBody.prepend(tr);
-              input.select();
+              input.value = '';
+              input.focus();
             })
             .catch(()=>{
               const tr = document.createElement('tr');
               tr.innerHTML = `<td>${new Date().toLocaleTimeString()}</td><td>${mode}</td><td>${code}</td><td>-</td><td>-</td><td class="err">network-error</td>`;
               tableBody.prepend(tr);
+              input.value = '';
+              input.focus();
             });
         }
       })();

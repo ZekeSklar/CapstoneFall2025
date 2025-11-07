@@ -1,0 +1,150 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+<style>
+  /* Use admin CSS variables so it looks correct in light/dark */
+  .pick-wrap { padding: 1rem; color: var(--body-fg); }
+  .pick-form { display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap; margin-bottom: .75rem; }
+  .inputs { display:flex; gap:.5rem; flex-wrap:wrap; }
+  .inputs .form-row { display:flex; flex-direction:column; }
+  .inputs input { min-width: 12rem; }
+
+  .pick-results { border:1px solid var(--hairline-color, #ddd); border-radius:6px; overflow:hidden; background: transparent; }
+  .pick-toolbar { display:flex; align-items:center; justify-content:space-between; background: transparent; padding:.5rem .75rem; border-bottom:1px solid var(--hairline-color, #eee); }
+  .muted { color: var(--body-quiet-color, #888); }
+
+  .pick-table { width:100%; border-collapse:collapse; }
+  .pick-table th, .pick-table td { padding:.5rem .75rem; border-bottom:1px solid var(--hairline-color, #333); }
+  .pick-table th { background: var(--primary); color: var(--primary-fg, #fff); text-transform: uppercase; letter-spacing: .02em; }
+
+  .btn { display:inline-block; padding:.35rem .7rem; border:1px solid var(--button-bg, #1f2937); border-radius:4px; background: var(--button-bg, #1f2937); color: var(--button-fg, #fff); text-decoration:none; cursor:pointer; }
+  .btn:hover { filter: brightness(1.05); }
+  .btn.primary { background: var(--button-bg, #1f2937); color: var(--button-fg, #fff); border-color: var(--button-bg, #1f2937); }
+
+  .actions { margin-top:.75rem; display:flex; gap:.5rem; }
+  .pad { padding:.5rem .75rem; }
+
+  /* Improve checkbox visibility on dark backgrounds */
+  .pick-table input[type="checkbox"] { width: 1.05rem; height: 1.05rem; }
+  .pick-toolbar label { color: var(--body-fg); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pick-wrap">
+  <h1>{{ title }}</h1>
+  <form method="get" class="pick-form">
+    <div class="inputs">
+      <div class="form-row">
+        <label for="id_make">Make</label>
+        <input id="id_make" type="text" name="make" value="{{ make_q|default:'' }}" list="make-options" autocomplete="off" placeholder="Start typing or pick..." />
+        <datalist id="make-options">
+          {% for m in make_options %}
+            <option value="{{ m }}"></option>
+          {% endfor %}
+        </datalist>
+      </div>
+      <div class="form-row">
+        <label for="id_model">Model</label>
+        <input id="id_model" type="text" name="model" value="{{ model_q|default:'' }}" list="model-options" autocomplete="off" placeholder="Start typing or pick..." />
+        <datalist id="model-options">
+          {% for m in model_options %}
+            <option value="{{ m }}"></option>
+          {% endfor %}
+        </datalist>
+      </div>
+    </div>
+    <div>
+      <button type="submit" class="btn">Search</button>
+      <button type="button" class="btn" onclick="window.close()">Close</button>
+    </div>
+  </form>
+
+  <div class="pick-results">
+    <div class="pick-toolbar">
+      <div>
+        <label><input type="checkbox" id="check-all" /> Select all on page</label>
+      </div>
+      <div class="muted">Showing {{ rows|length }} result{{ rows|length|pluralize }}</div>
+    </div>
+    <div class="pad">
+      {% if not rows %}
+        <div class="muted">No printers match your search.</div>
+      {% else %}
+        <table class="pick-table">
+          <thead>
+            <tr>
+              <th style="width:2rem;"></th>
+              <th>Printer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+              <tr>
+                <td><input type="checkbox" class="pick-box" value="{{ r.id }}" {% if r.selected %}checked{% endif %} /></td>
+                <td><label><strong>#{{ r.id }}</strong> &nbsp; {{ r.label }}</label></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="actions">
+          <button type="button" class="btn primary" id="add-selected">Add selected</button>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  function addToOpener(items){
+    try {
+      if (window.opener && typeof window.opener.ticketsAddCompatiblePrinters === 'function') {
+        window.opener.ticketsAddCompatiblePrinters(items);
+        return true;
+      }
+      // Fallback: try to add to select by id
+      if (window.opener) {
+        var sel = window.opener.document.getElementById('id_compatible_printers');
+        if (sel) {
+          items.forEach(function(it){
+            var exists = false;
+            for (var i=0;i<sel.options.length;i++){ if (sel.options[i].value == String(it.id)) { exists = true; break; } }
+            if (!exists) {
+              var opt = window.opener.document.createElement('option');
+              opt.value = String(it.id);
+              opt.text = it.label;
+              opt.selected = true;
+              sel.appendChild(opt);
+            } else {
+              for (var j=0;j<sel.options.length;j++){ if (sel.options[j].value == String(it.id)) { sel.options[j].selected = true; }}
+            }
+          });
+          try { var evt = new Event('change', {bubbles:true}); sel.dispatchEvent(evt); } catch(_e){}
+          return true;
+        }
+      }
+    } catch(_e) {}
+    return false;
+  }
+
+  document.getElementById('check-all')?.addEventListener('change', function(){
+    var boxes = document.querySelectorAll('.pick-box');
+    boxes.forEach(function(b){ b.checked = !!document.getElementById('check-all').checked; });
+  });
+
+  document.getElementById('add-selected')?.addEventListener('click', function(){
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('.pick-box:checked'));
+    if (!boxes.length) { window.close(); return; }
+    var items = boxes.map(function(b){
+      var row = b.closest('tr');
+      var label = row ? row.querySelector('td:nth-child(2)').innerText.trim() : ('Printer #' + b.value);
+      return { id: parseInt(b.value, 10), label: label };
+    });
+    if (addToOpener(items)) { window.close(); }
+  });
+})();
+</script>
+{% endblock %}
+

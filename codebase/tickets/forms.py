@@ -1,5 +1,5 @@
 from django import forms
-from django.forms import formset_factory
+from django.forms import formset_factory, BaseFormSet
 
 from .models import RequestTicket, InventoryItem
 from django.core.validators import RegexValidator
@@ -86,6 +86,68 @@ class SupplyItemForm(forms.Form):
 SupplyItemFormSet = formset_factory(SupplyItemForm, extra=0, min_num=1, validate_min=True, max_num=10)
 
 
+OTHER_SENTINEL = "__OTHER__"
+
+
+class InventorySupplyItemForm(forms.Form):
+    def __init__(self, *args, allowed_items_qs=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = allowed_items_qs if allowed_items_qs is not None else InventoryItem.objects.none()
+        # Build choices from queryset plus an explicit "Other" option
+        choices = [("", "---------")] + [
+            (str(obj.id), f"{obj.name}{f' [{obj.model_number}]' if obj.model_number else ''}")
+            for obj in qs
+        ]
+        choices.append((OTHER_SENTINEL, "Other / Not listed"))
+        self.fields['supply_item'].choices = choices
+
+    supply_item = forms.ChoiceField(
+        choices=[],
+        label="Supply item",
+        required=True,
+        help_text="Only items compatible with the selected printer(s).",
+    )
+    supply_other = forms.CharField(
+        max_length=200,
+        required=False,
+        label="Describe the item",
+        help_text="If choosing Other, briefly describe the needed supply.",
+        widget=forms.TextInput(attrs={
+            'placeholder': 'e.g., Staple cartridge for MX611',
+            'autocomplete': 'off',
+        }),
+    )
+    supply_quantity = forms.IntegerField(min_value=1, label="Quantity", initial=1)
+
+    def clean(self):
+        cleaned = super().clean()
+        selected = cleaned.get('supply_item')
+        other_text = (cleaned.get('supply_other') or '').strip()
+        if selected == OTHER_SENTINEL and not other_text:
+            self.add_error('supply_other', 'Please describe the item for Other / Not listed.')
+        return cleaned
+
+
+class BaseInventorySupplyItemFormSet(BaseFormSet):
+    def __init__(self, *args, allowed_items_qs=None, **kwargs):
+        self.allowed_items_qs = allowed_items_qs if allowed_items_qs is not None else InventoryItem.objects.none()
+        super().__init__(*args, **kwargs)
+
+    def _construct_form(self, i, **kwargs):
+        kwargs['allowed_items_qs'] = self.allowed_items_qs
+        return super()._construct_form(i, **kwargs)
+
+
+InventorySupplyItemFormSet = formset_factory(
+    InventorySupplyItemForm,
+    formset=BaseInventorySupplyItemFormSet,
+    extra=0,
+    min_num=1,
+    validate_min=True,
+    max_num=10,
+)
+
+
 class IssueReportForm(forms.ModelForm):
     def __init__(self, *args, user=None, manager_override=False, **kwargs):
         self.user = user
@@ -143,3 +205,11 @@ class InventoryItemAdminForm(forms.ModelForm):
         v = self.cleaned_data.get('shelf_row') or ''
         v = ''.join(ch for ch in v.strip().upper() if ch.isalpha())[:1]
         return v or None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Normalize any mojibake titles for the shelf_row widget
+        try:
+            self.fields['shelf_row'].widget.attrs['title'] = 'Single letter A-Z'
+        except Exception:
+            pass
