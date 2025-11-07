@@ -12,3 +12,6 @@ waitress>=3.0    # Windows-friendly production server
 # Optional: serve static files directly from app (see README for setup)
 whitenoise>=6.7
 
+# Database (PostgreSQL) for production persistence
+psycopg[binary]>=3.1
+dj-database-url>=2.2

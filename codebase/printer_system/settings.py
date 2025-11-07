@@ -14,6 +14,11 @@ from pathlib import Path
 from datetime import timedelta
 import os
 from dotenv import load_dotenv
+try:
+    import dj_database_url  # type: ignore
+    HAVE_DJ_DB_URL = True
+except Exception:
+    HAVE_DJ_DB_URL = False
 
 # Optional dependencies flags
 try:
@@ -121,6 +126,13 @@ DATABASES = {
         'NAME': BASE_DIR / 'data' / 'db.sqlite3',
     }
 }
+
+# If DATABASE_URL is set, prefer it (e.g., DigitalOcean Managed Postgres)
+_DB_URL = os.getenv('DATABASE_URL', '').strip()
+if _DB_URL and HAVE_DJ_DB_URL:
+    _conn_max_age = int(os.getenv('DB_CONN_MAX_AGE', '600') or '600')
+    _ssl_require = os.getenv('DB_SSL_REQUIRE', 'true').strip().lower() == 'true'
+    DATABASES['default'] = dj_database_url.parse(_DB_URL, conn_max_age=_conn_max_age, ssl_require=_ssl_require)
 
 
 # Password validation
