@@ -48,6 +48,13 @@ html[data-theme="dark"] {
 #header .branding, #header h1, #header a, .login #header .branding, .login #header h1, .login #header a {
   color: #fff !important;
 }
+/* Hide related add/change links for compatible_printers on InventoryItem form */
+.field-compatible_printers .related-widget-wrapper-link { display: none !important; }
+.form-row.field-compatible_printers .related-widget-wrapper-link { display: none !important; }
+.aligned .form-row.field-compatible_printers .related-widget-wrapper-link { display: none !important; }
+
+/* Space for inline help button */
+.field-compatible_printers .help a.pick-printers-btn.button { margin-left: .35rem; }
 /* Shared brand */
 :root{
   --berea-blue:#0033A0; --berea-blue-dark:#002b7a; --white:#fff; --black:#000;

@@ -1,28 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 from django.conf import settings
 
-try:  # pragma: no cover
-    from pysnmp.hlapi.asyncio import (
-        CommunityData,
-        ContextData,
-        ObjectIdentity,
-        ObjectType,
-        SnmpEngine,
-        UdpTransportTarget,
-        getCmd,
-        bulkCmd,
-    )
-except Exception:  # pragma: no cover
-    CommunityData = ContextData = ObjectIdentity = ObjectType = None  # type: ignore
-    SnmpEngine = UdpTransportTarget = getCmd = bulkCmd = None  # type: ignore
-    _PYSNMP_OK = False
-else:
-    _PYSNMP_OK = True
+# Defer importing pysnmp to runtime to avoid noisy deprecation warnings
+# (e.g., when an alternate package like pysnmp-lextudio is present) and
+# to keep startup fast if SNMP is unused. _ensure_pysnmp() performs the
+# actual import the first time SNMP is needed.
+CommunityData = ContextData = ObjectIdentity = ObjectType = None  # type: ignore
+SnmpEngine = UdpTransportTarget = getCmd = bulkCmd = None  # type: ignore
+_PYSNMP_OK = False
 
 
 def _ensure_pysnmp() -> bool:
@@ -31,16 +22,27 @@ def _ensure_pysnmp() -> bool:
     if _PYSNMP_OK:
         return True
     try:  # pragma: no cover
-        from pysnmp.hlapi.asyncio import (
-            CommunityData as _CommunityData,
-            ContextData as _ContextData,
-            ObjectIdentity as _ObjectIdentity,
-            ObjectType as _ObjectType,
-            SnmpEngine as _SnmpEngine,
-            UdpTransportTarget as _UdpTransportTarget,
-            getCmd as _getCmd,
-            bulkCmd as _bulkCmd,
-        )
+        # Suppress noisy deprecation warning emitted by the transitional
+        # 'pysnmp-lextudio' distribution. We prefer the official 'pysnmp'
+        # package (requirements.txt already specifies it), but some envs may
+        # still have the lextudio fork installed which emits a RuntimeWarning
+        # on import. Filtering here avoids log spam without affecting errors.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*pysnmp-lextudio.*deprecated.*",
+                category=RuntimeWarning,
+            )
+            from pysnmp.hlapi.asyncio import (
+                CommunityData as _CommunityData,
+                ContextData as _ContextData,
+                ObjectIdentity as _ObjectIdentity,
+                ObjectType as _ObjectType,
+                SnmpEngine as _SnmpEngine,
+                UdpTransportTarget as _UdpTransportTarget,
+                getCmd as _getCmd,
+                bulkCmd as _bulkCmd,
+            )
         CommunityData = _CommunityData
         ContextData = _ContextData
         ObjectIdentity = _ObjectIdentity

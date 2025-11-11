@@ -1,4 +1,4 @@
-from datetime import timedelta
+﻿from datetime import timedelta
 
 from django.contrib import messages
 
@@ -398,7 +398,7 @@ def printer_order(request, qr_token):
                 qty = item.get('supply_quantity')
                 if selected == OTHER_SENTINEL:
                     other_text = (item.get('supply_other') or '').strip() or 'unspecified'
-                    extra.append(f"Item {idx}: Other / Not listed — {other_text} (qty {qty})")
+                    extra.append(f"Item {idx}: Other / Not listed â€” {other_text} (qty {qty})")
                 else:
                     inv = allowed_map.get(str(selected))
                     if inv:
@@ -765,7 +765,7 @@ def manager_printer_order(request, printer_id):
                 qty = item.get('supply_quantity')
                 if selected == OTHER_SENTINEL:
                     other_text = (item.get('supply_other') or '').strip() or 'unspecified'
-                    extra.append(f"Item {idx}: Other / Not listed — {other_text} (qty {qty})")
+                    extra.append(f"Item {idx}: Other / Not listed â€” {other_text} (qty {qty})")
                 else:
                     inv = allowed_map.get(str(selected))
                     if inv:
@@ -917,7 +917,7 @@ def _handle_group_order_request(request, group: PrinterGroup, items_initial=None
                 qty = item.get('supply_quantity')
                 if selected == OTHER_SENTINEL:
                     other_text = (item.get('supply_other') or '').strip() or 'unspecified'
-                    extra.append(f"Item {idx}: Other / Not listed — {other_text} (qty {qty})")
+                    extra.append(f"Item {idx}: Other / Not listed â€” {other_text} (qty {qty})")
                 else:
                     inv = allowed_map.get(str(selected))
                     if inv:
