@@ -106,6 +106,7 @@ class InventorySupplyItemForm(forms.Form):
         label="Supply item",
         required=True,
         help_text="Only items compatible with the selected printer(s).",
+        widget=forms.Select,
     )
     supply_other = forms.CharField(
         max_length=200,
