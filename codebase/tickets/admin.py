@@ -9,6 +9,7 @@ from django.urls import path, reverse
 from django.template.response import TemplateResponse
 from django.http import Http404, HttpResponse, JsonResponse
 from django.utils.safestring import mark_safe
+import io
 import json
 import csv
 from .printer_status import POLL_INTERVAL_SECONDS, ensure_latest_status, build_status_payload
@@ -80,6 +81,37 @@ class PrinterCommentInline(admin.TabularInline):
 
 class CustomAdminSite(admin.AdminSite):
     site_url = None  # Remove 'View site' button
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path('export/db.json', self.admin_view(self.export_db_view), name='export_db'),
+        ]
+        return custom + urls
+
+    def export_db_view(self, request):
+        if not request.user.is_superuser:
+            return HttpResponse(status=403)
+        # Stream a JSON dump of the database (excluding system tables)
+        try:
+            from django.core.management import call_command
+            buf = io.StringIO()
+            call_command(
+                'dumpdata',
+                '--natural-foreign',
+                '--exclude', 'contenttypes',
+                '--exclude', 'auth.permission',
+                '--exclude', 'admin.logentry',
+                '--exclude', 'sessions',
+                stdout=buf,
+                indent=2,
+            )
+            data = buf.getvalue()
+        except Exception as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=500)
+        resp = HttpResponse(data, content_type='application/json')
+        resp['Content-Disposition'] = 'attachment; filename="db-backup.json"'
+        resp['Cache-Control'] = 'no-store'
+        return resp
     def index(self, request, extra_context=None):
         low_inventory_items = InventoryItem.objects.filter(quantity_on_hand__lte=models.F('reorder_threshold'))
         # Missing data summary for printers
